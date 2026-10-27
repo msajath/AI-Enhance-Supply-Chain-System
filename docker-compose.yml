@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qorvenz_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-qorvenz_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qorvenz_dev_secret_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-qorvenz_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qorvenz_user} -d ${POSTGRES_DB:-qorvenz_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - qorvenz-net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  qorvenz-net:
+    driver: bridge

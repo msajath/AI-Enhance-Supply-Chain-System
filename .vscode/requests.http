@@ -1,0 +1,26 @@
+### ==============================================================================
+### QORVENZ TECH — VS CODE REST CLIENT REQUEST COLLECTION
+### Install extension: "humao.rest-client"
+### ==============================================================================
+
+@baseUrl = http://localhost:4000
+@webUrl = http://localhost:5173
+
+### 1. Health Check Endpoint (Backend + PostgreSQL status)
+GET {{baseUrl}}/health
+Accept: application/json
+
+### 2. API v1 Welcome & Module Manifest
+GET {{baseUrl}}/api/v1
+Accept: application/json
+
+### 3. Frontend Dev Server Root
+GET {{webUrl}}
+
+### 4. Health Check via Frontend Proxy
+GET {{webUrl}}/health
+Accept: application/json
+
+### 5. 404 Error Test
+GET {{baseUrl}}/api/v1/non-existent-endpoint
+Accept: application/json

@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "formulahendry.auto-rename-tag",
+    "ms-azuretools.vscode-docker",
+    "ckolkman.vscode-postgres",
+    "humao.rest-client",
+    "eamodio.gitlens",
+    "vitest.explorer"
+  ]
+}
