@@ -67,7 +67,7 @@ VITE_API_BASE_URL=http://localhost:4000
 
 ## 5. Install Dependencies
 
-Install all monorepo dependencies (`apps/web`, `apps/api`, and root workspace tools) with a single command from root:
+Install all monorepo dependencies (`frontend`, `apps/api`, and root workspace tools) with a single command from root:
 
 ```bash
 npm install

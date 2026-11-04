@@ -18,7 +18,7 @@ This document records the verification matrix and execution tests performed for 
 | **8** | Frontend Development Server | `npm run dev:web` | **VERIFIED** | Vite dev server listening on `http://localhost:5173` |
 | **9** | Backend REST API Server | `npm run dev:api` | **VERIFIED** | Express server listening on `http://localhost:4000` |
 | **10** | Backend Health Endpoint | `GET /health` | **VERIFIED** | Returns 200 with structured health & DB status |
-| **11** | TypeScript Strict Compilation | `npm run typecheck` | **VERIFIED** | Strict compilation passes across `apps/api` and `apps/web` |
+| **11** | TypeScript Strict Compilation | `npm run typecheck` | **VERIFIED** | Strict compilation passes across `apps/api` and `frontend` |
 | **12** | ESLint Code Quality | `npm run lint` | **VERIFIED** | Zero lint errors |
 | **13** | Automated Tests | `npm run test` | **VERIFIED** | Vitest backend integration test passes |
 | **14** | Secrets Security | `.gitignore` & `git status` | **PASSED** | `.env` explicitly ignored; credentials prevented from Git |

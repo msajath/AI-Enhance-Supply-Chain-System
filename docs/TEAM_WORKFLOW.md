@@ -4,9 +4,9 @@
 
 | Member | Focus Modules | Git Branch Namespace | Primary Directory Areas |
 | :--- | :--- | :--- | :--- |
-| **Member 1** | Authentication, Organization Master, Procurement, Supplier Management | `feature/member1-*` | `apps/api/src/modules/auth/`, `procurement/`, `apps/web/src/pages/auth/`, `procurement/` |
-| **Member 2** | Material Master, Warehouses, Inventory, Stock Movements | `feature/member2-*` | `apps/api/src/modules/inventory/`, `apps/web/src/pages/inventory/` |
-| **Member 3** | Fleet & Heavy Equipment, Transportation, Delivery Tracking | `feature/member3-*` | `apps/api/src/modules/fleet/`, `logistics/`, `apps/web/src/pages/fleet/` |
+| **Member 1** | Authentication, Organization Master, Procurement, Supplier Management | `feature/member1-*` | `apps/api/src/modules/auth/`, `procurement/`, `frontend/src/pages/auth/`, `procurement/` |
+| **Member 2** | Material Master, Warehouses, Inventory, Stock Movements | `feature/member2-*` | `apps/api/src/modules/inventory/`, `frontend/src/pages/inventory/` |
+| **Member 3** | Fleet & Heavy Equipment, Transportation, Delivery Tracking | `feature/member3-*` | `apps/api/src/modules/fleet/`, `logistics/`, `frontend/src/pages/fleet/` |
 | **Member 4** | Reporting & Analytics, AI Orchestration, DevOps, Testing & CI/CD | `feature/member4-*` | `apps/api/src/modules/reporting/`, `ai/`, `.github/workflows/`, root DevOps configs |
 
 ---
