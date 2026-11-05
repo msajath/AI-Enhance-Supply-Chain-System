@@ -27,7 +27,7 @@ describe('login', () => {
     expect(screen.getByLabelText('Work email')).toHaveAttribute('autocomplete', 'username');
     expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
     expect(screen.queryByText('Use demo login')).not.toBeInTheDocument();
-    expect(screen.queryByText('Good morning,')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Good (morning|afternoon|evening),/)).not.toBeInTheDocument();
   });
   it('validates empty fields and focuses the email', async () => {
     await renderLogin(); submit();
@@ -43,7 +43,7 @@ describe('login', () => {
   it('sends credentials and renders the existing dashboard with the server role and name', async () => {
     post.mockResolvedValue({ data: { success: true, data: { user } } });
     await renderLogin(); await fill(); submit();
-    await screen.findByRole('heading', { name: /Good morning, Test/ });
+    await screen.findByRole('heading', { name: /Good (morning|afternoon|evening), Test/ });
     expect(post).toHaveBeenCalledWith('/api/v1/auth/login', { email: user.email, password: 'entered-secret' }, { withCredentials: true });
     expect(screen.queryByRole('button', { name: 'Team' })).not.toBeInTheDocument();
     expect(localStorage.getItem('token')).toBeNull();
@@ -94,20 +94,20 @@ describe('session lifecycle', () => {
     get.mockResolvedValue({ data: { success: true, data: { user } } });
     render(<App/>);
     expect(screen.getByRole('status')).toHaveTextContent('Restoring your session');
-    await screen.findByRole('heading', { name: /Good morning, Test/ });
+    await screen.findByRole('heading', { name: /Good (morning|afternoon|evening), Test/ });
     expect(get).toHaveBeenCalledWith('/api/v1/auth/session', { withCredentials: true });
   });
   it('reports restoration failures without displaying protected content', async () => {
     get.mockRejectedValue(failure(503));
     await renderLogin();
     expect(screen.getByRole('status')).toHaveTextContent('Unable to restore your session');
-    expect(screen.queryByRole('heading', { name: /Good morning/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Good (morning|afternoon|evening)/ })).not.toBeInTheDocument();
   });
   it('invalidates the backend session before clearing authentication', async () => {
     get.mockResolvedValue({ data: { success: true, data: { user } } });
     post.mockResolvedValue({ data: { success: true } });
     render(<App/>);
-    await screen.findByRole('heading', { name: /Good morning/ });
+    await screen.findByRole('heading', { name: /Good (morning|afternoon|evening)/ });
     await userEvent.click(screen.getByTitle('Sign out'));
     await screen.findByRole('heading', { name: 'Sign in to your workspace' });
     expect(post).toHaveBeenCalledWith('/api/v1/auth/logout', {}, { withCredentials: true });
@@ -116,9 +116,9 @@ describe('session lifecycle', () => {
     get.mockResolvedValue({ data: { success: true, data: { user } } });
     post.mockRejectedValue(failure(503));
     render(<App/>);
-    await screen.findByRole('heading', { name: /Good morning/ });
+    await screen.findByRole('heading', { name: /Good (morning|afternoon|evening)/ });
     await userEvent.click(screen.getByTitle('Sign out'));
     expect(await screen.findByText('Unable to sign out. Please try again.')).toBeVisible();
-    expect(screen.getByRole('heading', { name: /Good morning/ })).toBeVisible();
+    expect(screen.getByRole('heading', { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
   });
 });
