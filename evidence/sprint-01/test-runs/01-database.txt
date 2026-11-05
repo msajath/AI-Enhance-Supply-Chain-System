@@ -1,0 +1,116 @@
+# Database: migrate → seed ×2 → rollback → migrate → constraint test
+# Run: 2026-11-05T16:02:47Z · PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
+# Start state = team's current DB: 001 migration + OLD 001 seed (admin@qorvenz.local with the shared password)
+
+$ npm run db:migrate
+--- [QORVENZ MIGRATION RUNNER] ---
+Connecting to PostgreSQL at /var/tmp/pg:5434/qorvenz_db as qorvenz_user...
+✓ Successfully connected to PostgreSQL.
+- Skipping already applied migration: 001_sprint1_foundation.sql
+▶ Applying migration: 002_core_org_structure.sql...
+✓ Migration applied successfully: 002_core_org_structure.sql
+==============================================
+Migration complete. Newly applied: 1, Total checked: 2
+==============================================
+
+$ npm run db:seed   (1st run)
+--- [QORVENZ SEED RUNNER] ---
+Connecting to PostgreSQL at /var/tmp/pg:5434/qorvenz_db...
+✓ Successfully connected to PostgreSQL.
+▶ Executing seed file: 001_sprint1_seed.sql...
+✓ Seed script executed: 001_sprint1_seed.sql
+▶ Executing seed file: 002_sprint1_org_structure.sql...
+✓ Seed script executed: 002_sprint1_org_structure.sql
+
+=== New local login credentials (shown ONCE: save them in your password manager) ===
+  admin@demo.qorvenz.test            ADMIN              <random 16-char password>
+  warehouse.cen@demo.qorvenz.test    WAREHOUSE_MANAGER  <random 16-char password>
+  storekeeper.mat@demo.qorvenz.test  WAREHOUSE_MANAGER  <random 16-char password>
+  driver.1@demo.qorvenz.test         DRIVER             <random 16-char password>
+  driver.2@demo.qorvenz.test         DRIVER             <random 16-char password>
+  admin@qorvenz.local                DISABLED (used the old shared password; sign in as admin@demo.qorvenz.test)
+=== Do not commit or share these. Each team member seeds their own database. ===
+
+All seed data executed successfully.
+
+$ npm run db:seed   (2nd run: must add nothing)
+--- [QORVENZ SEED RUNNER] ---
+Connecting to PostgreSQL at /var/tmp/pg:5434/qorvenz_db...
+✓ Successfully connected to PostgreSQL.
+▶ Executing seed file: 001_sprint1_seed.sql...
+✓ Seed script executed: 001_sprint1_seed.sql
+▶ Executing seed file: 002_sprint1_org_structure.sql...
+✓ Seed script executed: 002_sprint1_org_structure.sql
+✓ Users already exist; passwords unchanged.
+All seed data executed successfully.
+
+# Row counts after 2 seed runs
+ projects | sites | departments | warehouses | users | active_users | distinct_active_password_hashes | project_grants | warehouse_grants 
+----------+-------+-------------+------------+-------+--------------+---------------------------------+----------------+------------------
+        2 |     2 |           4 |          2 |     6 |            5 |                               5 |              3 |                2
+(1 row)
+
+# Fixture plan (docs/sprint-01/09 §1) as seeded
+ project |             name             |    sites    
+---------+------------------------------+-------------
+ PRJ-GAL | Galle Road Apartments        | SITE-GAL-01
+ PRJ-MAT | Matara Bridge Rehabilitation | SITE-MAT-01
+(2 rows)
+
+   warehouse   | warehouse_type |    site     
+---------------+----------------+-------------
+ WH-CENTRAL-01 | CENTRAL        | -
+ WH-MAT        | SITE           | SITE-MAT-01
+(2 rows)
+
+# Who can see which project
+               email               |       role        | is_active |      projects       
+-----------------------------------+-------------------+-----------+---------------------
+ admin@demo.qorvenz.test           | ADMIN             | t         | (all, company-wide)
+ admin@qorvenz.local               | ADMIN             | f         | (all, company-wide)
+ driver.1@demo.qorvenz.test        | DRIVER            | t         | (none)
+ driver.2@demo.qorvenz.test        | DRIVER            | t         | (none)
+ storekeeper.mat@demo.qorvenz.test | WAREHOUSE_MANAGER | t         | PRJ-MAT
+ warehouse.cen@demo.qorvenz.test   | WAREHOUSE_MANAGER | t         | PRJ-GAL, PRJ-MAT
+(6 rows)
+
+$ npm run db:rollback
+▶ Rolling back 002_core_org_structure.sql...
+✓ Rolled back 002_core_org_structure.sql
+tables left from 002: 0
+
+$ npm run db:migrate   (re-apply)
+▶ Applying migration: 002_core_org_structure.sql...
+✓ Migration applied successfully: 002_core_org_structure.sql
+Migration complete. Newly applied: 1, Total checked: 2
+$ npm run db:seed
+✓ Users already exist; passwords unchanged.
+All seed data executed successfully.
+
+$ psql -v ON_ERROR_STOP=1 -f database/tests/002_core_org_structure.test.sql
+PASS: duplicate project code in same company (rejected with 23505)
+PASS: project for unknown company (rejected with 23503)
+PASS: project without code (rejected with 23502)
+PASS: blank project code (rejected with 23514)
+PASS: invalid project status (rejected with 23514)
+PASS: project end before start (rejected with 23514)
+PASS: same project code allowed in a different company; valid site created
+PASS: site linked to another company's project (rejected with 23503)
+PASS: duplicate site code in project (rejected with 23505)
+PASS: delete project that still has sites (rejected with 23503)
+PASS: duplicate department code (rejected with 23505)
+PASS: duplicate cost centre code (rejected with 23505)
+PASS: SITE warehouse linked to its site
+PASS: SITE warehouse without site (rejected with 23514)
+PASS: CENTRAL warehouse with a site (rejected with 23514)
+PASS: warehouse linked to another company's site (rejected with 23503)
+PASS: warehouse without company (rejected with 23502)
+PASS: user granted a project in their own company
+PASS: duplicate project grant (rejected with 23505)
+PASS: grant another company's project (claimed org B) (rejected with 23503)
+PASS: grant another company's project (claimed org A) (rejected with 23503)
+PASS: user granted a warehouse in their own company
+PASS: user deletion cascades to access grants
+PASS: updated_at trigger refreshes timestamp
+PASS: company/project/site lookup indexes exist
+ALL 002 CONSTRAINT TESTS PASSED (transaction rolled back, no data kept)

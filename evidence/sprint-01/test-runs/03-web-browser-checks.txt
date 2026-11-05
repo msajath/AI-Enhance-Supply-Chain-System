@@ -1,0 +1,25 @@
+# Browser checks: Projects & Sites pages (Chromium via Playwright, API mocked per scenario) · 2026-11-05T15:47:31Z
+PASS: admin sees 2 projects
+PASS: company-wide scope text shown
+PASS: client-side search narrows list
+PASS: no-match state
+PASS: "View sites" opens Sites filtered to that project
+PASS: filter is sent to the server as ?projectId=
+PASS: filter dropdown shows the chosen project
+PASS: other project's sites do not appear
+PASS: "All projects" shows all 4 sites
+PASS: switching filter to Galle shows only Galle sites
+PASS: loading skeleton visible while request is pending
+PASS: panel marked aria-busy during load
+PASS: screen-reader loading announcement
+PASS: aria-busy cleared after load
+PASS: empty state explains what to do
+PASS: scoped scope text for manager
+PASS: sites empty state
+PASS: error state shows a safe message (no server details)
+PASS: retry reloads successfully
+PASS: filter only offers projects the server returned
+PASS: 403 shows an access message
+PASS: drivers do not see Projects/Sites in the menu
+PASS: no horizontal scroll on 390px phone (overflow=0)
+ALL E2E CHECKS PASSED

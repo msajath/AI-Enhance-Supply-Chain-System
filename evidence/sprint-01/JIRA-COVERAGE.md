@@ -57,6 +57,8 @@ All 40 written cards were already done: see `docs/sprint-01/00-SPRINT-01-STATUS.
 
 ## 4. Commands (repeatable)
 
+> Full step-by-step guide (setup → run → demo → PRs/CI → Jira → complete sprint): **[`docs/SPRINT-1-RUN-AND-CLOSE.md`](../../docs/SPRINT-1-RUN-AND-CLOSE.md)**
+
 ```powershell
 # one-time
 npm install                       # installs API + web deps (API deps were not installed on this machine yet)
