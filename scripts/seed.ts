@@ -48,7 +48,7 @@ const seedUsers: ReadonlyArray<{
   // Plan: "storekeeper.mat → WH-MAT only. This proves cross-project denial".
   // Uses WAREHOUSE_MANAGER until a STOREKEEPER role exists (Q-402).
   { email: 'storekeeper.mat@demo.qorvenz.test', fullName: 'Matara Site Storekeeper', role: 'WAREHOUSE_MANAGER', projects: ['PRJ-MAT'], warehouses: ['WH-MAT'], passwordEnv: 'SEED_PASSWORD_STOREKEEPER_MAT' },
-  { email: 'fleet@demo.qorvenz.test', fullName: 'Fleet Manager', role: 'FLEET_MANAGER', projects: ['PRJ-GAL', 'PRJ-MAT'], warehouses: [], passwordEnv: 'SEED_PASSWORD_FLEET' },
+  { email: 'fleet@demo.qorvenz.test', fullName: 'Fleet Manager', role: 'FLEET_MANAGER', projects: [], warehouses: [], passwordEnv: 'SEED_PASSWORD_FLEET' },
   { email: 'warehouse.review@demo.qorvenz.test', fullName: 'Warehouse Reviewer', role: 'WAREHOUSE_MANAGER', projects: ['PRJ-GAL', 'PRJ-MAT'], warehouses: ['WH-CENTRAL-01', 'WH-MAT'], passwordEnv: 'SEED_PASSWORD_WAREHOUSE_REVIEW' },
 ];
 
@@ -110,6 +110,12 @@ async function runUserSeeds(): Promise<string[]> {
        ON CONFLICT (user_id, project_id) DO NOTHING`,
       [userId, organizationId, user.projects]
     );
+    if (user.projects.length === 0) {
+      await client.query(
+        'DELETE FROM user_project_access WHERE user_id = $1 AND organization_id = $2',
+        [userId, organizationId]
+      );
+    }
     await client.query(
       `INSERT INTO user_warehouse_access (user_id, warehouse_id, organization_id)
        SELECT $1, w.id, w.organization_id FROM warehouses w
