@@ -13,9 +13,8 @@ async function renderLogin() { render(<App/>); await screen.findByRole('heading'
 const failure = (status?: number, code?: string) => new AxiosError('private database details', code, undefined, undefined,
   status ? { status, data: { error: 'account exists' }, statusText: '', headers: new AxiosHeaders(), config: { headers: new AxiosHeaders() } } : undefined);
 beforeEach(() => { post.mockReset(); get.mockRejectedValue(failure(401)); localStorage.clear(); });
-async function fill(role = 'Driver') {
+async function fill() {
   const keyboard = userEvent.setup();
-  await keyboard.click(screen.getByRole('radio', { name: new RegExp(`^${role}`) }));
   await keyboard.type(screen.getByLabelText('Work email'), 'member@example.com');
   await keyboard.type(screen.getByLabelText('Password'), 'entered-secret');
   return keyboard;
@@ -34,8 +33,7 @@ describe('login', () => {
     await renderLogin(); submit();
     expect(screen.getByText('Email is required.')).toBeVisible();
     expect(screen.getByText('Password is required.')).toBeVisible();
-    expect(screen.getByText('Select the role you are signing in as.')).toBeVisible();
-    expect(screen.getByRole('radio', { name: /^Admin/ })).toHaveFocus();
+    expect(screen.getByLabelText('Work email')).toHaveFocus();
     expect(post).not.toHaveBeenCalled();
   });
   it('validates email before calling the API', async () => {
@@ -46,7 +44,7 @@ describe('login', () => {
     post.mockResolvedValue({ data: { success: true, data: { user } } });
     await renderLogin(); await fill(); submit();
     await screen.findByRole('heading', { name: /Good morning, Test/ });
-    expect(post).toHaveBeenCalledWith('/api/v1/auth/login', { email: user.email, password: 'entered-secret', role: 'DRIVER' }, { withCredentials: true });
+    expect(post).toHaveBeenCalledWith('/api/v1/auth/login', { email: user.email, password: 'entered-secret' }, { withCredentials: true });
     expect(screen.queryByRole('button', { name: 'Team' })).not.toBeInTheDocument();
     expect(localStorage.getItem('token')).toBeNull();
   });
@@ -55,21 +53,6 @@ describe('login', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Email or password is incorrect.');
     expect(screen.getByLabelText('Password')).toHaveValue('');
     expect(screen.queryByText(/account exists/)).not.toBeInTheDocument();
-  });
-  it('offers all three roles and sends the selected role code', async () => {
-    post.mockResolvedValue({ data: { success: true, data: { user: { ...user, role: 'Warehouse manager' } } } });
-    await renderLogin();
-    for (const name of [/^Admin/, /^Warehouse manager/, /^Driver/]) expect(screen.getByRole('radio', { name })).not.toBeChecked();
-    await fill('Warehouse manager'); submit();
-    await screen.findByRole('heading', { name: /Good morning, Test/ });
-    expect(post).toHaveBeenCalledWith('/api/v1/auth/login', expect.objectContaining({ role: 'WAREHOUSE_MANAGER' }), { withCredentials: true });
-    expect(screen.getByRole('button', { name: 'Inventory' })).toBeInTheDocument();
-  });
-  it('explains when the account does not have the selected role', async () => {
-    const mismatch = failure(403);
-    (mismatch.response as { data: unknown }).data = { success: false, error: { code: 'ROLE_MISMATCH', message: 'nope' } };
-    post.mockRejectedValue(mismatch); await renderLogin(); await fill('Admin'); submit();
-    expect(await screen.findByRole('alert')).toHaveTextContent('This account does not have Admin access.');
   });
   it('handles network failures', async () => {
     post.mockRejectedValue(failure()); await renderLogin(); await fill(); submit();
@@ -105,35 +88,6 @@ describe('login', () => {
   it('maps timeouts', () => { expect(loginErrorMessage(failure(undefined, 'ECONNABORTED'))).toMatch(/timed out/); });
 });
 
-
-describe('signup', () => {
-  async function openSignup() {
-    await renderLogin();
-    await userEvent.click(screen.getByRole('button', { name: /Create an account/ }));
-    await screen.findByRole('heading', { name: 'Create your workspace account' });
-  }
-  async function fillSignup(role: string) {
-    const keyboard = userEvent.setup();
-    await keyboard.click(screen.getByRole('radio', { name: new RegExp(`^${role}`) }));
-    await keyboard.type(screen.getByLabelText('Full name'), 'New Person');
-    await keyboard.type(screen.getByLabelText('Work email'), 'new@example.com');
-    await keyboard.type(screen.getByLabelText('Password'), 'long-enough-1');
-  }
-  it('requires a role before creating the account', async () => {
-    await openSignup();
-    fireEvent.submit(screen.getByRole('button', { name: /Create account/ }).closest('form')!);
-    expect(screen.getByText('Select the role for this account.')).toBeVisible();
-    expect(post).not.toHaveBeenCalled();
-  });
-  it.each([['Admin', 'ADMIN'], ['Warehouse manager', 'WAREHOUSE_MANAGER'], ['Driver', 'DRIVER']])('creates a %s account with the matching role code', async (label, code) => {
-    post.mockResolvedValue({ data: { success: true, data: { user: { ...user, full_name: 'New Person', role: label } } } });
-    await openSignup(); await fillSignup(label);
-    expect(screen.getByText(`Your account will be created with ${label} access`)).toBeVisible();
-    fireEvent.submit(screen.getByRole('button', { name: /Create account/ }).closest('form')!);
-    await screen.findByRole('heading', { name: /Good morning, New/ });
-    expect(post).toHaveBeenCalledWith('/api/v1/auth/signup', { fullName: 'New Person', email: 'new@example.com', password: 'long-enough-1', role: code }, { withCredentials: true });
-  });
-});
 
 describe('session lifecycle', () => {
   it('restores an authenticated user before rendering the dashboard', async () => {

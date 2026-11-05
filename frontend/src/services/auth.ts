@@ -9,21 +9,12 @@ export interface AuthUser {
   role: 'Admin' | 'Warehouse manager' | 'Driver';
 }
 
-export type RoleName = AuthUser['role'];
-
-// Maps the display role to the role code stored in the database.
-export const roleCodes: Record<RoleName, 'ADMIN' | 'WAREHOUSE_MANAGER' | 'DRIVER'> = {
-  Admin: 'ADMIN',
-  'Warehouse manager': 'WAREHOUSE_MANAGER',
-  Driver: 'DRIVER',
-};
-
-export async function login(credentials: { email: string; password: string; role?: 'ADMIN' | 'WAREHOUSE_MANAGER' | 'DRIVER' }): Promise<AuthUser> {
+export async function login(credentials: { email: string; password: string }): Promise<AuthUser> {
   const response = await apiClient.post('/api/v1/auth/login', credentials, { withCredentials: true });
   return parseUser(response.data);
 }
 
-export async function signup(credentials: { fullName: string; email: string; password: string; role: 'ADMIN' | 'WAREHOUSE_MANAGER' | 'DRIVER' }): Promise<AuthUser> {
+export async function signup(credentials: { fullName: string; email: string; password: string }): Promise<AuthUser> {
   const response = await apiClient.post('/api/v1/auth/signup', credentials, { withCredentials: true });
   return parseUser(response.data);
 }
@@ -39,13 +30,9 @@ function parseUser(data: unknown): AuthUser {
   return { id: user.id, email: user.email, full_name: user.full_name, role: user.role };
 }
 
-export function loginErrorMessage(error: unknown, role?: RoleName): string {
+export function loginErrorMessage(error: unknown): string {
   if (!axios.isAxiosError(error)) return 'Unable to sign in. Please try again later.';
   const status = error.response?.status;
-  const code = (error.response?.data as { error?: { code?: string } } | undefined)?.error?.code;
-  if (status === 403 && code === 'ROLE_MISMATCH') {
-    return role ? `This account does not have ${role} access. Choose the correct role.` : 'This account does not have access to the selected role.';
-  }
   if (status === 401 || status === 403) return 'Email or password is incorrect.';
   if (status === 400 || status === 422) return 'Check your email and password and try again.';
   if (status === 429) return 'Too many sign-in attempts. Please wait before trying again.';
