@@ -17,6 +17,11 @@ const devSecret = randomBytes(32).toString('hex');
 const dummyHash = hashSync(randomBytes(32).toString('hex'), 12);
 const roleNames: Record<string, string> = { ADMIN: 'Admin', WAREHOUSE_MANAGER: 'Warehouse manager', DRIVER: 'Driver' };
 const credentialsSchema = z.object({ email: z.string().trim().email().max(255), password: z.string().min(1).max(72).refine(value => Buffer.byteLength(value, 'utf8') <= 72) }).strict();
+const signupSchema = z.object({
+  fullName: z.string().trim().min(2).max(255),
+  email: z.string().trim().email().max(255),
+  password: z.string().min(8).max(72).refine(value => Buffer.byteLength(value, 'utf8') <= 72),
+}).strict();
 const jwtSignOptions: SignOptions = {
   algorithm: 'HS256',
   expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
@@ -87,6 +92,35 @@ export function createAuthRouter(store?: session.Store) {
         user: publicUser(row),
       }, 'Login successful'));
     } catch { res.status(503).json(ApiResponse.error('Sign-in service is unavailable. Please try again later.', 'AUTH_UNAVAILABLE')); }
+  });
+  router.post('/signup', rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-7', legacyHeaders: false, message: ApiResponse.error('Too many sign-up attempts. Please try again later.', 'RATE_LIMITED') }), async (req, res) => {
+    const parsed = signupSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json(ApiResponse.error('Enter a name, valid email, and password with at least 8 characters.', 'INVALID_INPUT')); return; }
+    try {
+      const passwordHash = await hashSync(parsed.data.password, 12);
+      const result = await pool.query(
+        'INSERT INTO users (email, password_hash, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, full_name, role, is_active',
+        [parsed.data.email.toLowerCase(), passwordHash, parsed.data.fullName, 'DRIVER']
+      );
+      const row = result.rows[0];
+      await new Promise<void>((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
+      req.session.userId = row.id;
+      await new Promise<void>((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
+      const accessToken = jwt.sign({ sub: row.id }, env.JWT_SECRET, jwtSignOptions);
+      const tokenPayload = jwt.decode(accessToken) as JwtPayload;
+      res.status(201).json(ApiResponse.success({
+        accessToken,
+        tokenType: 'Bearer',
+        expiresIn: (tokenPayload.exp ?? 0) - (tokenPayload.iat ?? 0),
+        user: publicUser(row),
+      }, 'Account created'));
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        res.status(409).json(ApiResponse.error('An account with this email already exists.', 'EMAIL_ALREADY_REGISTERED'));
+        return;
+      }
+      res.status(503).json(ApiResponse.error('Sign-up service is unavailable. Please try again later.', 'AUTH_UNAVAILABLE'));
+    }
   });
   router.get('/session', async (req, res) => {
     if (!req.session.userId) { res.status(401).json(ApiResponse.error('Authentication required.', 'UNAUTHENTICATED')); return; }

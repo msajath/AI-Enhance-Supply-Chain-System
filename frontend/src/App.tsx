@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { login, logout, restoreSession, loginErrorMessage, AuthUser } from './services/auth';
+import { login, signup, logout, restoreSession, loginErrorMessage, signupErrorMessage, AuthUser } from './services/auth';
 
 type Role = AuthUser['role'];
 type IconName = 'grid' | 'box' | 'truck' | 'users' | 'chart' | 'settings' | 'search' | 'bell' | 'arrow' | 'clock' | 'pin' | 'check' | 'plus' | 'filter' | 'more' | 'menu' | 'close' | 'logout' | 'package' | 'route' | 'sun' | 'moon';
@@ -132,6 +132,7 @@ function App() {
 }
 
 function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme }: { onSignIn: (user: AuthUser) => void; sessionError: string; email: string; setEmail: (value: string) => void; theme: 'light' | 'dark'; toggleTheme: () => void }) {
+  const [signupMode, setSignupMode] = useState(false);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -159,6 +160,7 @@ function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme
     catch (error) { setLoginError(loginErrorMessage(error)); }
     finally { submitting.current = false; setLoading(false); }
   };
+  if (signupMode) return <SignupPage onSignIn={onSignIn} theme={theme} toggleTheme={toggleTheme} onBackToLogin={() => setSignupMode(false)}/>;
   return <main className={`login-page ${theme === 'dark' ? 'theme-dark' : ''}`}>
     <section className="login-story">
       <div className="login-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div>
@@ -175,8 +177,32 @@ function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme
         {errors.password && <p id="password-error" className="login-error" role="alert">{errors.password}</p>}
         {loginError && <div className="login-error" role="alert">{loginError}</div>}
         <button type="submit" className="login-submit" disabled={loading}>{loading ? <><span className="login-spinner" aria-hidden="true"/> Signing in...</> : <>Sign in<Icon name="arrow" size={16}/></>}</button>
-      </form><div className="login-note"><Icon name="check" size={14}/><span>Secure access for your Qorvenz workspace</span></div>
+      </form><div className="login-note"><Icon name="check" size={14}/><span>Secure access for your Qorvenz workspace</span></div><button type="button" className="auth-switch" onClick={() => setSignupMode(true)}>New to Qorvenz? <strong>Create an account</strong></button>
     </div><div className="login-mobile-footer">© 2026 Qorvenz Technologies</div></section>
+  </main>;
+}
+
+function SignupPage({ onSignIn, theme, toggleTheme, onBackToLogin }: { onSignIn: (user: AuthUser) => void; theme: 'light' | 'dark'; toggleTheme: () => void; onBackToLogin: () => void }) {
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!fullName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || password.length < 8) {
+      setError('Enter your name, a valid email, and a password with at least 8 characters.');
+      return;
+    }
+    setLoading(true); setError('');
+    try { onSignIn(await signup({ fullName: fullName.trim(), email: email.trim(), password })); }
+    catch (submitError) { setError(signupErrorMessage(submitError)); }
+    finally { setLoading(false); }
+  };
+  return <main className={`login-page ${theme === 'dark' ? 'theme-dark' : ''}`}>
+    <section className="login-story"><div className="login-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div><div className="story-content"><div className="story-eyebrow"><span/> ONE CONNECTED OPERATION</div><h1>Build better,<br/>move <em>together.</em></h1><p>Bring your team, materials, and deliveries together in one clear view.</p></div><div className="story-footer"><span>BUILT FOR THE WORK THAT BUILDS THE WORLD</span><span>© 2026 Qorvenz Technologies</span></div></section>
+    <section className="login-form-side"><button type="button" className="icon-button login-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18}/></button><div className="login-form-wrap"><div className="login-mobile-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div><div className="login-heading"><div className="eyebrow">GET STARTED</div><h2>Create your workspace account</h2><p>Join your team and manage your supply chain.</p></div>
+      <form className="login-form" noValidate onSubmit={submit} aria-busy={loading}><label className="login-label" htmlFor="signup-name">Full name</label><div className="login-input-wrap"><input id="signup-name" disabled={loading} autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Your full name"/></div><label className="login-label" htmlFor="signup-email">Work email</label><div className="login-input-wrap"><span className="input-symbol">@</span><input id="signup-email" disabled={loading} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com"/></div><label className="login-label" htmlFor="signup-password">Password</label><div className="login-input-wrap"><input id="signup-password" disabled={loading} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters"/></div>{error && <div className="login-error" role="alert">{error}</div>}<button type="submit" className="login-submit" disabled={loading}>{loading ? 'Creating account...' : <>Create account<Icon name="arrow" size={16}/></>}</button></form><div className="login-note"><Icon name="check" size={14}/><span>Your account starts with Driver access</span></div><button type="button" className="auth-switch" onClick={onBackToLogin}>Already have an account? <strong>Sign in</strong></button></div><div className="login-mobile-footer">© 2026 Qorvenz Technologies</div></section>
   </main>;
 }
 

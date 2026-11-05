@@ -14,6 +14,11 @@ export async function login(credentials: { email: string; password: string }): P
   return parseUser(response.data);
 }
 
+export async function signup(credentials: { fullName: string; email: string; password: string }): Promise<AuthUser> {
+  const response = await apiClient.post('/api/v1/auth/signup', credentials, { withCredentials: true });
+  return parseUser(response.data);
+}
+
 function parseUser(data: unknown): AuthUser {
   const response = { data: data as { success?: boolean; data?: { user?: AuthUser } } };
   const user = response.data?.data?.user;
@@ -34,6 +39,16 @@ export function loginErrorMessage(error: unknown): string {
   if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') return 'Sign-in timed out. Please try again.';
   if (!error.response) return 'Unable to connect. Check your connection and try again.';
   return 'Sign-in service is unavailable. Please try again later.';
+}
+
+export function signupErrorMessage(error: unknown): string {
+  if (!axios.isAxiosError(error)) return 'Unable to create your account. Please try again later.';
+  const status = error.response?.status;
+  if (status === 409) return 'An account with this email already exists.';
+  if (status === 400 || status === 422) return 'Check your name, email, and password and try again.';
+  if (status === 429) return 'Too many sign-up attempts. Please wait before trying again.';
+  if (!error.response) return 'Unable to connect. Check your connection and try again.';
+  return 'Sign-up service is unavailable. Please try again later.';
 }
 
 export async function restoreSession(): Promise<AuthUser | null> {
