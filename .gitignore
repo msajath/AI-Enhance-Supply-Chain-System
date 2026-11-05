@@ -49,6 +49,8 @@ docker-data/
 # Temporary files
 tmp/
 temp/
+_to_delete/
+evidence/
 
 # Test reports (CI uploads them as artifacts)
 test-results/
