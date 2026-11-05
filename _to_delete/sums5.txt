@@ -1,8 +1,0 @@
-49b230fba2b7fc019ca7ce16e019ed79  frontend/src/App.tsx
-e86f4776392021d971ee8b2a68270c96  frontend/src/App.test.tsx
-031c8eb7088430c2b270dab113e877f2  frontend/src/index.css
-fe479af98dc78d313f373c283474cf45  frontend/src/components/SiteIllustration.tsx
-08cdadee34656ac80eb821ee48b4c9f4  frontend/src/pages/Projects.tsx
-64593d36c715e5e11f9f933a784fd2b7  frontend/src/pages/Sites.tsx
-b3830df4ec597df26e3555e07d4f0b14  frontend/src/pages/orgShared.tsx
-37e7881fc0b121912b10cf212ed15990  frontend/src/pages/format.ts
