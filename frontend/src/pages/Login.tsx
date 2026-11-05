@@ -25,6 +25,12 @@ export function AuthLayout({ theme, toggleTheme, children, dense = false }: { th
   </main>;
 }
 
+const DEMO_ACCOUNTS = [
+  { role: 'Admin', email: 'admin@demo.qorvenz.test', password: 'Password123!', icon: 'settings' as const },
+  { role: 'Fleet Manager', email: 'fleet@demo.qorvenz.test', password: 'Password123!', icon: 'truck' as const },
+  { role: 'Warehouse Manager', email: 'warehouse.cen@demo.qorvenz.test', password: 'Password123!', icon: 'package' as const },
+] as const;
+
 export default function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme }: { onSignIn: (user: AuthUser) => void; sessionError: string; email: string; setEmail: (value: string) => void; theme: Theme; toggleTheme: () => void }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,6 +40,13 @@ export default function LoginPage({ onSignIn, sessionError, email, setEmail, the
   const [errors, setErrors] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const submitting = useRef(false);
+
+  const fillDemoAccount = (account: (typeof DEMO_ACCOUNTS)[number]) => {
+    setEmail(account.email);
+    setPassword(account.password);
+    setErrors({ email: '', password: '' });
+    setLoginError('');
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -61,6 +74,32 @@ export default function LoginPage({ onSignIn, sessionError, email, setEmail, the
   return <AuthLayout theme={theme} toggleTheme={toggleTheme}>
     <h1 className="auth-title">Sign in to your workspace</h1>
     <p className="auth-lead">Use your Qorvenz work account.</p>
+    <div className="demo-accounts-panel">
+      <div className="demo-accounts-top">
+        <span className="demo-badge">Quick Demo Access</span>
+        <span className="demo-password-note">Password: <code>Password123!</code></span>
+      </div>
+      <div className="demo-accounts-list">
+        {DEMO_ACCOUNTS.map((acc) => {
+          const isSelected = email === acc.email;
+          return (
+            <button
+              key={acc.email}
+              type="button"
+              className={`demo-row-btn ${isSelected ? 'selected' : ''}`}
+              onClick={() => fillDemoAccount(acc)}
+              title={`Fill ${acc.role} credentials`}
+            >
+              <div className="demo-row-left">
+                <span className="demo-row-icon"><Icon name={acc.icon} size={15}/></span>
+                <strong className="demo-row-role">{acc.role}</strong>
+              </div>
+              <span className="demo-row-email">{acc.email}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
     {sessionError && <p className="form-error" role="status">{sessionError}</p>}
     <form className="auth-form" noValidate onSubmit={submit} aria-busy={loading}>
       <div className="field">
