@@ -1,6 +1,12 @@
 import { useMemo, useState } from 'react';
 
+<<<<<<< Updated upstream
 type Role = 'Admin' | 'Warehouse manager' | 'Driver';
+=======
+import { login, signup, logout, restoreSession, loginErrorMessage, signupErrorMessage, roleCodes, AuthUser } from './services/auth';
+
+type Role = AuthUser['role'];
+>>>>>>> Stashed changes
 type IconName = 'grid' | 'box' | 'truck' | 'users' | 'chart' | 'settings' | 'search' | 'bell' | 'arrow' | 'clock' | 'pin' | 'check' | 'plus' | 'filter' | 'more' | 'menu' | 'close' | 'logout' | 'package' | 'route' | 'sun' | 'moon';
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
@@ -117,6 +123,7 @@ function App() {
   </div>;
 }
 
+<<<<<<< Updated upstream
 function LoginPage({ onSignIn, email, setEmail, theme, toggleTheme }: { onSignIn: (role: Role) => void; email: string; setEmail: (value: string) => void; theme: 'light' | 'dark'; toggleTheme: () => void }) {
   const [selectedRole, setSelectedRole] = useState<Role>('Admin');
   const [password, setPassword] = useState('');
@@ -126,6 +133,59 @@ function LoginPage({ onSignIn, email, setEmail, theme, toggleTheme }: { onSignIn
     Admin: { email: 'admin@qorvenz.demo', password: 'Admin@123' },
     'Warehouse manager': { email: 'warehouse@qorvenz.demo', password: 'Warehouse@123' },
     Driver: { email: 'driver@qorvenz.demo', password: 'Driver@123' },
+=======
+const loginRoles: { role: Role; icon: IconName; description: string }[] = [
+  { role: 'Admin', icon: 'grid', description: 'Full workspace control' },
+  { role: 'Warehouse manager', icon: 'box', description: 'Stock & outbound orders' },
+  { role: 'Driver', icon: 'truck', description: 'Routes & deliveries' },
+];
+
+function RolePicker({ idPrefix, legend, selected, onSelect, error, disabled }: { idPrefix: string; legend: string; selected: Role | null; onSelect: (role: Role) => void; error: string; disabled: boolean }) {
+  return <>
+    <fieldset className="role-picker" aria-describedby={error ? `${idPrefix}-role-error` : undefined} disabled={disabled}>
+      <legend className="login-label">{legend}</legend>
+      <div className="role-options">{loginRoles.map((option, index) => <label key={option.role} className={`role-option ${selected === option.role ? 'role-option-selected' : ''}`}>
+        <input id={`${idPrefix}-role-${index}`} type="radio" name={`${idPrefix}-role`} value={option.role} checked={selected === option.role} onChange={() => onSelect(option.role)}/>
+        <span className="role-option-icon"><Icon name={option.icon} size={18}/></span>
+        <span className="role-option-copy"><strong>{option.role}</strong><small>{option.description}</small></span>
+      </label>)}</div>
+    </fieldset>
+    {error && <p id={`${idPrefix}-role-error`} className="login-error" role="alert">{error}</p>}
+  </>;
+}
+
+function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme }: { onSignIn: (user: AuthUser) => void; sessionError: string; email: string; setEmail: (value: string) => void; theme: 'light' | 'dark'; toggleTheme: () => void }) {
+  const [signupMode, setSignupMode] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [errors, setErrors] = useState({ role: '', email: '', password: '' });
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [loading, setLoading] = useState(false);
+  const submitting = useRef(false);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submitting.current) return;
+    const errors = {
+      role: !selectedRole ? 'Select the role you are signing in as.' : '',
+      email: !email.trim() ? 'Email is required.' : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'Enter a valid email address.' : '',
+      password: !password ? 'Password is required.' : '',
+    };
+    setErrors(errors);
+    setLoginError('');
+    if (errors.role || errors.email || errors.password) {
+      document.getElementById(errors.role ? 'login-role-0' : errors.email ? 'login-email' : 'login-password')?.focus();
+      return;
+    }
+    submitting.current = true;
+    setLoading(true);
+    const role = selectedRole as Role;
+    const credentials = { email: email.trim(), password, role: roleCodes[role] };
+    setPassword('');
+    try { onSignIn(await login(credentials)); }
+    catch (error) { setLoginError(loginErrorMessage(error, role)); }
+    finally { submitting.current = false; setLoading(false); }
+>>>>>>> Stashed changes
   };
   const demoAccount = demoAccounts[selectedRole];
   const fillDemoCredentials = () => {
@@ -145,6 +205,7 @@ function LoginPage({ onSignIn, email, setEmail, theme, toggleTheme }: { onSignIn
         <div className="supply-visual" aria-hidden="true"><div className="visual-grid"/><div className="visual-route route-one"/><div className="visual-route route-two"/><div className="visual-node node-warehouse"><Icon name="box" size={20}/></div><div className="visual-node node-truck"><Icon name="truck" size={20}/></div><div className="visual-node node-site"><Icon name="pin" size={20}/></div><div className="visual-caption caption-left"><span>WAREHOUSE</span><strong>Seattle North</strong></div><div className="visual-caption caption-right"><span>DELIVERY STATUS</span><strong><i/> On the way</strong></div><div className="visual-metric"><span>Today’s deliveries</span><strong>24 <small>orders</small></strong><div><i/><i/><i/><i/><i/><i/><i/><i/></div></div></div>
       </div><div className="story-footer"><span>BUILT FOR THE WORK THAT BUILDS THE WORLD</span><span>© 2026 Qorvenz Technologies</span></div>
     </section>
+<<<<<<< Updated upstream
     <section className="login-form-side"><button type="button" className="icon-button login-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18}/></button><div className="login-form-wrap"><div className="login-mobile-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div><div className="login-heading"><div className="eyebrow">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Choose your role and enter your account details.</p></div>
       <form className="login-form" onSubmit={(event) => { event.preventDefault(); if (email.trim().toLowerCase() !== demoAccount.email || password !== demoAccount.password) { setLoginError(`Those credentials don’t match the ${selectedRole} demo account.`); return; } setLoginError(''); onSignIn(selectedRole); }}>
         <fieldset className="role-picker"><legend>CONTINUE AS</legend><div className="role-cards">{roles.map((item) => <button type="button" key={item.name} className={`role-card ${selectedRole === item.name ? 'role-card-active' : ''}`} onClick={() => { setSelectedRole(item.name); setLoginError(''); }} aria-pressed={selectedRole === item.name}><span className="role-card-icon"><Icon name={item.icon} size={17}/></span><span className="role-card-copy"><strong>{item.name}</strong><small>{item.caption}</small></span><span className="role-radio"/></button>)}</div></fieldset>
@@ -154,10 +215,77 @@ function LoginPage({ onSignIn, email, setEmail, theme, toggleTheme }: { onSignIn
         {loginError && <div className="login-error" role="alert">{loginError}</div>}
         <label className="remember-row"><input type="checkbox"/><span className="custom-checkbox"/><span>Keep me signed in</span></label><button type="submit" className="login-submit">Sign in as {selectedRole}<Icon name="arrow" size={16}/></button>
       </form><div className="login-note"><Icon name="check" size={14}/><span>Secure access for your Qorvenz workspace</span></div>
+=======
+    <section className="login-form-side">
+      <div className="login-top-bar">
+        <button type="button" className="icon-button login-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18}/></button>
+      </div>
+      <div className="login-form-wrap"><div className="login-mobile-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div><div className="login-heading"><div className="eyebrow">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Choose your role and enter your account details.</p></div>
+      {sessionError && <p className="login-error" role="status">{sessionError}</p>}
+      <form className="login-form" noValidate onSubmit={submit} aria-busy={loading}>
+        <RolePicker idPrefix="login" legend="Sign in as" selected={selectedRole} disabled={loading} error={errors.role} onSelect={role => { setSelectedRole(role); setErrors(current => ({ ...current, role: '' })); setLoginError(''); }}/>
+        <label className="login-label" htmlFor="login-email">Work email</label><div className="login-input-wrap"><span className="input-symbol">@</span><input id="login-email" aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined} disabled={loading} type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com"/></div>
+        {errors.email && <p id="email-error" className="login-error" role="alert">{errors.email}</p>}
+        <div className="password-label-row"><label className="login-label" htmlFor="login-password">Password</label><button type="button" className="forgot-link" onClick={() => window.alert('Ask your workspace administrator to reset your password.')}>Forgot password?</button></div><div className="login-input-wrap"><span className="input-symbol password-dots">•••</span><input id="login-password" aria-invalid={!!errors.password} aria-describedby={errors.password ? "password-error" : undefined} disabled={loading} type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password"/><button type="button" className="show-password" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button></div>
+        {errors.password && <p id="password-error" className="login-error" role="alert">{errors.password}</p>}
+        {loginError && <div className="login-error" role="alert">{loginError}</div>}
+        <button type="submit" className="login-submit" disabled={loading}>{loading ? <><span className="login-spinner" aria-hidden="true"/> Signing in...</> : <>Sign in<Icon name="arrow" size={16}/></>}</button>
+        {selectedRole && !loading && <p className="role-hint">Signing in to the <strong>{selectedRole}</strong> workspace</p>}
+      </form><div className="login-note"><Icon name="check" size={14}/><span>Secure access for your Qorvenz workspace</span></div><button type="button" className="auth-switch" onClick={() => setSignupMode(true)}>New to Qorvenz? <strong>Create an account</strong></button>
+>>>>>>> Stashed changes
     </div><div className="login-mobile-footer">© 2026 Qorvenz Technologies</div></section>
   </main>;
 }
 
+<<<<<<< Updated upstream
+=======
+function SignupPage({ onSignIn, theme, toggleTheme, onBackToLogin }: { onSignIn: (user: AuthUser) => void; theme: 'light' | 'dark'; toggleTheme: () => void; onBackToLogin: () => void }) {
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [roleError, setRoleError] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setRoleError(selectedRole ? '' : 'Select the role for this account.');
+    if (!selectedRole) { document.getElementById('signup-role-0')?.focus(); return; }
+    if (!fullName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || password.length < 8) {
+      setError('Enter your name, a valid email, and a password with at least 8 characters.');
+      return;
+    }
+    setLoading(true); setError('');
+    try { onSignIn(await signup({ fullName: fullName.trim(), email: email.trim(), password, role: roleCodes[selectedRole] })); }
+    catch (submitError) { setError(signupErrorMessage(submitError)); }
+    finally { setLoading(false); }
+  };
+  return <main className={`login-page ${theme === 'dark' ? 'theme-dark' : ''}`}>
+    <section className="login-story">
+      <div className="login-story-glow" aria-hidden="true" />
+      <div className="login-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div>
+      <div className="story-content">
+        <div className="story-eyebrow"><span/> ONE CONNECTED OPERATION</div>
+        <h1>Build better,<br/>move <em>together.</em></h1>
+        <p>Bring your team, materials, and deliveries together in one clear view.</p>
+        <div className="story-trust-pills" aria-hidden="true">
+          <div className="trust-pill"><Icon name="check" size={13}/> Dispatch & Routes</div>
+          <div className="trust-pill"><Icon name="box" size={13}/> Warehouse stock</div>
+          <div className="trust-pill"><Icon name="chart" size={13}/> Live analytics</div>
+        </div>
+      </div>
+      <div className="story-footer"><span>BUILT FOR THE WORK THAT BUILDS THE WORLD</span><span>© 2026 Qorvenz Technologies</span></div>
+    </section>
+    <section className="login-form-side">
+      <div className="login-top-bar">
+        <button type="button" className="icon-button login-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18}/></button>
+      </div>
+      <div className="login-form-wrap"><div className="login-mobile-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div><div className="login-heading"><div className="eyebrow">GET STARTED</div><h2>Create your workspace account</h2><p>Join your team and manage your supply chain.</p></div>
+      <form className="login-form" noValidate onSubmit={submit} aria-busy={loading}><RolePicker idPrefix="signup" legend="Register as" selected={selectedRole} disabled={loading} error={roleError} onSelect={role => { setSelectedRole(role); setRoleError(''); setError(''); }}/><label className="login-label" htmlFor="signup-name">Full name</label><div className="login-input-wrap"><input id="signup-name" disabled={loading} autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Your full name"/></div><label className="login-label" htmlFor="signup-email">Work email</label><div className="login-input-wrap"><span className="input-symbol">@</span><input id="signup-email" disabled={loading} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com"/></div><label className="login-label" htmlFor="signup-password">Password</label><div className="login-input-wrap"><input id="signup-password" disabled={loading} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters"/></div>{error && <div className="login-error" role="alert">{error}</div>}<button type="submit" className="login-submit" disabled={loading}>{loading ? 'Creating account...' : <>Create account<Icon name="arrow" size={16}/></>}</button></form><div className="login-note"><Icon name="check" size={14}/><span>{selectedRole ? `Your account will be created with ${selectedRole} access` : 'Choose the role that matches your job'}</span></div><button type="button" className="auth-switch" onClick={onBackToLogin}>Already have an account? <strong>Sign in</strong></button></div><div className="login-mobile-footer">© 2026 Qorvenz Technologies</div></section>
+  </main>;
+}
+
+>>>>>>> Stashed changes
 function Metric({ title, value, detail, note, icon, accent, chart }: { title: string; value: string; detail: string; note: string; icon: IconName; accent: string; chart: string }) {
   const lines: Record<string, string> = { inventory: '0,26 14,19 27,22 40,10 52,14 65,5 78,9 92,0', delivery: '0,21 14,25 27,13 40,18 52,8 65,14 78,4 92,8', suppliers: '0,18 14,22 27,13 40,17 52,7 65,12 78,1 92,5', ontime: '0,24 14,17 27,19 40,12 52,15 65,5 78,10 92,0' };
   return <article className="metric-card"><div className="metric-top"><span>{title}</span><span className={`metric-icon ${accent}`}><Icon name={icon} size={17}/></span></div><div className="metric-value">{value}</div><div className="metric-bottom"><div><span className={`metric-change ${detail.startsWith('−') ? 'negative' : ''}`}>{detail}</span><span className="metric-note"> {note}</span></div><svg className="sparkline" viewBox="0 0 92 30" preserveAspectRatio="none"><polyline points={lines[chart]} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div></article>;
