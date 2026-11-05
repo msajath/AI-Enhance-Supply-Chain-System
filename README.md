@@ -14,18 +14,10 @@ An industrial-grade construction supply chain management and automated intellige
 
 ```text
 AI-Enhance-Supply-Chain-System/
+├── frontend/                   # React 18 + Vite + TypeScript Frontend (Port 5173)
+│   ├── src/                    # Role dashboards, services, and types
+│   └── package.json
 ├── apps/
-│   ├── web/                    # React 18 + Vite + TypeScript Frontend (Port 5173)
-│   │   ├── src/
-│   │   │   ├── components/     # UI Components & Telemetry Widgets
-│   │   │   ├── pages/          # Application Pages (Dashboard, Health, etc.)
-│   │   │   ├── layouts/        # App Shell Layouts
-│   │   │   ├── routes/         # React Router Definitions
-│   │   │   ├── services/       # Reusable Axios API Client
-│   │   │   ├── hooks/          # Custom React Hooks (useHealth, etc.)
-│   │   │   └── types/          # Shared Frontend Type Definitions
-│   │   └── package.json
-│   │
 │   └── api/                    # Express + TypeScript REST API Backend (Port 4000)
 │       ├── src/
 │       │   ├── config/         # Environment Schema & PostgreSQL Pool
