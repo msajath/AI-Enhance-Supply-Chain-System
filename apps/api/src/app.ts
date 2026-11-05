@@ -1,5 +1,7 @@
 import type session from 'express-session';
 import { createAuthRouter } from './routes/auth.routes';
+import { createOrganizationRouter } from './routes/organization.routes';
+import { createDefaultSessionStore, createSessionMiddleware } from './middleware/session';
 import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -32,8 +34,12 @@ export function createApp(sessionStore?: session.Store): Express {
   // Logging middleware
   app.use(requestLogger);
 
+  // One session store shared by the auth router and the protected business routes.
+  const store = sessionStore ?? createDefaultSessionStore();
+
   // Mount API and health routes
-  app.use('/api/v1/auth', createAuthRouter(sessionStore));
+  app.use('/api/v1/auth', createAuthRouter(store));
+  app.use('/api/v1', createOrganizationRouter(createSessionMiddleware(store)));
   app.use(rootRouter);
 
   // 404 handler for undefined routes
