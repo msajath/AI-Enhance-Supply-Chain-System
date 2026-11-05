@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { z } from 'zod';
 
 // Load .env from root project directory or current working directory
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });

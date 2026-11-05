@@ -16,7 +16,8 @@ describe.skipIf(!enabled)('real PostgreSQL authentication integration', () => {
   const password = 'Integration-only-password!';
   beforeAll(async () => {
     if (env.DB_NAME !== 'qorvenz_auth_test') throw new Error('Integration tests require DB_NAME=qorvenz_auth_test');
-    await pool.query(readFileSync(path.resolve(__dirname, '../../../database/migrations/001_sprint1_foundation.sql'), 'utf8'));
+    const migrationPath = path.resolve(__dirname, '../../database/migrations/001_sprint1_foundation.sql');
+    await pool.query(readFileSync(migrationPath, 'utf8'));
     await pool.query('INSERT INTO users (id, email, password_hash, full_name, role) VALUES ($1,$2,$3,$4,$5)', [id, email, await hash(password, 12), 'Integration User', 'DRIVER']);
   });
   afterAll(async () => { if (env.DB_NAME === 'qorvenz_auth_test') await pool.query('DELETE FROM users WHERE id=$1', [id]); await pool.end(); });

@@ -12,7 +12,7 @@ import { installFakeDb, PASSWORD, users } from './helpers/fakeDb';
  * Covers: GET /health, successful/failed login, and missing / expired / tampered /
  * wrong-audience tokens on both the auth API and a protected business route.
  *
- * Run:  cd apps/api && npx vitest run tests/smoke.test.ts
+ * Run:  cd backend && npx vitest run tests/smoke.test.ts
  */
 
 const query = vi.spyOn(pool, 'query');
