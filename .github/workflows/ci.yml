@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - develop
+      - developer2
   pull_request:
     branches:
       - main
       - develop
+      - developer2
 
 jobs:
   validate:
@@ -40,6 +42,8 @@ jobs:
       DB_NAME: qorvenz_db
       DB_SSL: false
       JWT_SECRET: qorvenz_ci_test_jwt_secret_key_1234567890_abcdef
+      SESSION_SECRET: qorvenz_ci_session_secret_key_min_32_chars_long
+      CORS_ORIGIN: http://localhost:5173
       VITE_API_BASE_URL: http://localhost:4000
 
     steps:
@@ -53,7 +57,7 @@ jobs:
           cache: 'npm'
 
       - name: Install Monorepo Dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Check TypeScript Compilation
         run: npm run typecheck
