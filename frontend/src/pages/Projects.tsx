@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchProjects, isCanceled, loadErrorMessage, type Project, type Scope } from '../services/organization';
 import { EmptyState, ErrorState, LoadingRows, SearchIcon, StatusPill } from './orgShared';
-import { formatDate } from './format';
+import { formatDate, scheduleProgress } from './format';
 
 /**
  * Projects page (Jira AESCS-42 / AESCS-162, Member 3).
@@ -41,12 +41,11 @@ export function ProjectsPage({ onViewSites }: { onViewSites: (projectId: string)
   return <>
     <div className="page-heading">
       <div>
-        <div className="eyebrow">WORKSPACE · PROJECTS</div>
         <h1>Projects</h1>
         <p>{scopeText}</p>
       </div>
     </div>
-    <section className="panel listing-panel org-panel" aria-busy={state.status === 'loading'} aria-labelledby="projects-title">
+    <section className="panel org-panel" aria-busy={state.status === 'loading'} aria-labelledby="projects-title">
       <div className="panel-heading">
         <div>
           <h2 id="projects-title">Your projects</h2>
@@ -54,7 +53,7 @@ export function ProjectsPage({ onViewSites }: { onViewSites: (projectId: string)
         </div>
         <label className="search-box listing-search">
           <SearchIcon />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects..." aria-label="Search projects" disabled={state.status !== 'ready'} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects" aria-label="Search projects" disabled={state.status !== 'ready'} />
         </label>
       </div>
 
@@ -66,22 +65,23 @@ export function ProjectsPage({ onViewSites }: { onViewSites: (projectId: string)
       {state.status === 'ready' && state.projects.length > 0 && visible.length === 0 && (
         <EmptyState title="No matches">No projects match &ldquo;{query}&rdquo;.</EmptyState>
       )}
-      {state.status === 'ready' && visible.length > 0 && <div className="table-scroll">
-        <table className="org-table">
-          <thead><tr><th>PROJECT</th><th>STATUS</th><th>SCHEDULE</th><th>SITES</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
-          <tbody>{visible.map((project) => <tr key={project.id}>
-            <td data-label="Project"><strong>{project.name}</strong><small>{project.code}</small></td>
-            <td data-label="Status"><StatusPill status={project.status} /></td>
-            <td data-label="Schedule">{formatDate(project.startDate)} – {formatDate(project.endDate)}</td>
-            <td data-label="Sites"><span className="count-chip">{project.siteCount}</span></td>
-            <td className="org-actions">
-              <button type="button" className="text-button" onClick={() => onViewSites(project.id)} aria-label={`View sites for ${project.name}`}>
-                View sites <span aria-hidden="true">→</span>
-              </button>
-            </td>
-          </tr>)}</tbody>
-        </table>
-      </div>}
+      {state.status === 'ready' && visible.length > 0 && <ul className="card-grid">
+        {visible.map((project) => {
+          const schedule = scheduleProgress(project.startDate, project.endDate);
+          return <li className="project-card" key={project.id}>
+            <div className="card-top"><span className="card-code">{project.code}</span><StatusPill status={project.status} /></div>
+            <h3>{project.name}</h3>
+            <div className="schedule" aria-label={`Schedule: ${schedule.label}`}>
+              <div className="schedule-bar"><span style={{ width: `${schedule.percent}%` }} /></div>
+              <div className="schedule-meta"><span>{formatDate(project.startDate)} – {formatDate(project.endDate)}</span><span>{schedule.label}</span></div>
+            </div>
+            <div className="card-foot">
+              <span>{project.siteCount} {project.siteCount === 1 ? 'site' : 'sites'}</span>
+              <button type="button" className="button button-outline button-sm" onClick={() => onViewSites(project.id)} aria-label={`View sites for ${project.name}`}>View sites</button>
+            </div>
+          </li>;
+        })}
+      </ul>}
     </section>
   </>;
 }

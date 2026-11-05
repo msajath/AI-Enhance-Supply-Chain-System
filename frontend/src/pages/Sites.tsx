@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchProjects, fetchSites, isCanceled, loadErrorMessage, type Project, type Site } from '../services/organization';
-import { EmptyState, ErrorState, LoadingRows, StatusPill } from './orgShared';
+import { EmptyState, ErrorState, LoadingRows, PinIcon, StatusPill } from './orgShared';
 
 /**
  * Sites page with project filter (Jira AESCS-42 / AESCS-163, Member 3).
@@ -40,12 +40,11 @@ export function SitesPage({ initialProjectId = '' }: { initialProjectId?: string
   return <>
     <div className="page-heading">
       <div>
-        <div className="eyebrow">WORKSPACE · SITES</div>
         <h1>Sites</h1>
         <p>Construction sites in the projects you can access.</p>
       </div>
     </div>
-    <section className="panel listing-panel org-panel" aria-busy={state.status === 'loading'} aria-labelledby="sites-title">
+    <section className="panel org-panel" aria-busy={state.status === 'loading'} aria-labelledby="sites-title">
       <div className="panel-heading">
         <div>
           <h2 id="sites-title">{selected ? selected.name : 'All sites'}</h2>
@@ -66,17 +65,14 @@ export function SitesPage({ initialProjectId = '' }: { initialProjectId?: string
       {state.status === 'ready' && state.sites.length === 0 && (
         <EmptyState title="No sites">{projectId ? 'This project has no sites yet.' : 'There are no sites in your projects yet.'}</EmptyState>
       )}
-      {state.status === 'ready' && state.sites.length > 0 && <div className="table-scroll">
-        <table className="org-table">
-          <thead><tr><th>SITE</th><th>PROJECT</th><th>ADDRESS</th><th>STATUS</th></tr></thead>
-          <tbody>{state.sites.map((site) => <tr key={site.id}>
-            <td data-label="Site"><strong>{site.name}</strong><small>{site.code}</small></td>
-            <td data-label="Project"><strong>{site.projectName}</strong><small>{site.projectCode}</small></td>
-            <td data-label="Address">{site.address ?? '—'}</td>
-            <td data-label="Status"><StatusPill status={site.status} /></td>
-          </tr>)}</tbody>
-        </table>
-      </div>}
+      {state.status === 'ready' && state.sites.length > 0 && <ul className="card-grid" key={projectId}>
+        {state.sites.map((site) => <li className="site-card" key={site.id}>
+          <div className="card-top"><span className="card-code">{site.code}</span><StatusPill status={site.status} /></div>
+          <h3>{site.name}</h3>
+          <p className="site-project">{site.projectName} <span>{site.projectCode}</span></p>
+          <p className="site-address"><PinIcon />{site.address ?? 'No address recorded'}</p>
+        </li>)}
+      </ul>}
     </section>
   </>;
 }
