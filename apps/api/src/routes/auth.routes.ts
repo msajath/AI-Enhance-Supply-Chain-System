@@ -1,22 +1,32 @@
 import { Router } from 'express';
 import type session from 'express-session';
-import { compare, hashSync } from 'bcryptjs';
+import { compare, hash, hashSync } from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
 import { pool } from '../config/database';
 import { createDefaultSessionStore, createSessionMiddleware, SESSION_COOKIE_NAME as cookieName, sessionCookie as cookie } from '../middleware/session';
+import { withTransaction } from '../config/database';
+import { logger } from '../utils/logger';
 import { env } from '../config/env';
 import { ApiResponse } from '../utils/apiResponse';
 
 const dummyHash = hashSync(randomBytes(32).toString('hex'), 12);
 const roleNames: Record<string, string> = { ADMIN: 'Admin', WAREHOUSE_MANAGER: 'Warehouse manager', DRIVER: 'Driver' };
-const credentialsSchema = z.object({ email: z.string().trim().email().max(255), password: z.string().min(1).max(72).refine(value => Buffer.byteLength(value, 'utf8') <= 72) }).strict();
+const roleCodeSchema = z.enum(['ADMIN', 'WAREHOUSE_MANAGER', 'DRIVER']);
+const credentialsSchema = z.object({
+  email: z.string().trim().email().max(255),
+  password: z.string().min(1).max(72).refine(value => Buffer.byteLength(value, 'utf8') <= 72),
+  // Optional portal the user is signing in to. The database role is always authoritative.
+  role: roleCodeSchema.optional(),
+}).strict();
 const signupSchema = z.object({
   fullName: z.string().trim().min(2).max(255),
   email: z.string().trim().email().max(255),
   password: z.string().min(8).max(72).refine(value => Buffer.byteLength(value, 'utf8') <= 72),
+  // Role the new account is registered with; defaults to the least-privileged role.
+  role: roleCodeSchema.default('DRIVER'),
 }).strict();
 const jwtSignOptions: SignOptions = {
   algorithm: 'HS256',
@@ -24,6 +34,15 @@ const jwtSignOptions: SignOptions = {
   issuer: env.JWT_ISSUER,
   audience: env.JWT_AUDIENCE,
 };
+
+// Audit events are best-effort: a logging failure must never block sign in.
+async function recordAuthEvent(actorId: string, eventType: string, metadata: Record<string, unknown>) {
+  try {
+    await pool.query('INSERT INTO system_audit_logs (actor_id, event_type, module, metadata) VALUES ($1, $2, $3, $4)', [actorId, eventType, 'auth', JSON.stringify(metadata)]);
+  } catch (error) {
+    logger.warn('Unable to record auth audit event', { eventType, error: (error as Error).message });
+  }
+}
 
 function publicUser(row: { id: string; email: string; full_name: string; role: string }) {
   return { id: row.id, email: row.email, full_name: row.full_name, role: roleNames[row.role] };
@@ -74,9 +93,14 @@ export function createAuthRouter(store?: session.Store) {
       if (!matches || !row?.is_active || !role) {
         res.status(401).json(ApiResponse.error('Email or password is incorrect.', 'INVALID_CREDENTIALS')); return;
       }
+      // Role-based login: the selected portal must match the account's assigned role.
+      if (parsed.data.role && parsed.data.role !== row.role) {
+        res.status(403).json(ApiResponse.error(`This account does not have ${roleNames[parsed.data.role]} access.`, 'ROLE_MISMATCH')); return;
+      }
       await new Promise<void>((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
       req.session.userId = row.id;
       await new Promise<void>((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
+      await recordAuthEvent(row.id, 'USER_LOGIN', { role: row.role });
       const accessToken = jwt.sign({ sub: row.id }, env.JWT_SECRET, jwtSignOptions);
       const tokenPayload = jwt.decode(accessToken) as JwtPayload;
       res.json(ApiResponse.success({
@@ -89,14 +113,24 @@ export function createAuthRouter(store?: session.Store) {
   });
   router.post('/signup', rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-7', legacyHeaders: false, message: ApiResponse.error('Too many sign-up attempts. Please try again later.', 'RATE_LIMITED') }), async (req, res) => {
     const parsed = signupSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json(ApiResponse.error('Enter a name, valid email, and password with at least 8 characters.', 'INVALID_INPUT')); return; }
+    if (!parsed.success) { res.status(400).json(ApiResponse.error('Enter a name, valid email, password with at least 8 characters, and a valid role.', 'INVALID_INPUT')); return; }
     try {
-      const passwordHash = await hashSync(parsed.data.password, 12);
-      const result = await pool.query(
-        'INSERT INTO users (email, password_hash, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, full_name, role, is_active',
-        [parsed.data.email.toLowerCase(), passwordHash, parsed.data.fullName, 'DRIVER']
-      );
-      const row = result.rows[0];
+      const passwordHash = await hash(parsed.data.password, 12);
+      const { email, fullName, role } = parsed.data;
+      // User, organization membership and audit entry are written atomically.
+      const row = await withTransaction(async client => {
+        const organization = await client.query('SELECT id FROM organizations ORDER BY created_at ASC LIMIT 1');
+        const inserted = await client.query(
+          'INSERT INTO users (organization_id, email, password_hash, full_name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, full_name, role, is_active',
+          [organization.rows[0]?.id ?? null, email.toLowerCase(), passwordHash, fullName, role]
+        );
+        const user = inserted.rows[0];
+        await client.query(
+          'INSERT INTO system_audit_logs (actor_id, event_type, module, metadata) VALUES ($1, $2, $3, $4)',
+          [user.id, 'USER_SIGNUP', 'auth', JSON.stringify({ role })]
+        );
+        return user;
+      });
       await new Promise<void>((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
       req.session.userId = row.id;
       await new Promise<void>((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));

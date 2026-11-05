@@ -73,11 +73,75 @@ describe('authentication API with isolated database and session store', () => {
     const res = await request(createApp(new session.MemoryStore())).post('/api/v1/auth/login').send({ email: row.email, password });
     expect(res.status).toBe(503); expect(JSON.stringify(res.body)).not.toMatch(/SQL|stack|private/);
   });
-  it('rejects cross-origin login and browser-supplied roles', async () => {
+  it('rejects cross-origin login and unknown browser-supplied roles', async () => {
     const app = createApp(new session.MemoryStore());
     expect((await request(app).post('/api/v1/auth/login').set('Origin', 'https://untrusted.example').send({ email: row.email, password })).status).toBe(403);
-    expect((await request(app).post('/api/v1/auth/login').send({ email: row.email, password, role: 'ADMIN' })).status).toBe(400);
+    expect((await request(app).post('/api/v1/auth/login').send({ email: row.email, password, role: 'SUPERUSER' })).status).toBe(400);
     expect(query).not.toHaveBeenCalled();
+  });
+  it('role-based login: the selected role must match the stored role and can never grant one', async () => {
+    const driver = { ...row, role: 'DRIVER' };
+    const app = createApp(new session.MemoryStore());
+    query.mockResolvedValueOnce(response([driver]));
+    const escalation = await request(app).post('/api/v1/auth/login').send({ email: row.email, password, role: 'ADMIN' });
+    expect(escalation.status).toBe(403);
+    expect(escalation.body.error.code).toBe('ROLE_MISMATCH');
+    expect(escalation.headers['set-cookie']).toBeUndefined();
+    expect(escalation.body.data).toBeUndefined();
+    query.mockResolvedValueOnce(response([driver]));
+    const allowed = await request(app).post('/api/v1/auth/login').send({ email: row.email, password, role: 'DRIVER' });
+    expect(allowed.status).toBe(200);
+    expect(allowed.body.data.user.role).toBe('Driver');
+    query.mockResolvedValueOnce(response([driver]));
+    const wrongPassword = await request(app).post('/api/v1/auth/login').send({ email: row.email, password: 'incorrect', role: 'ADMIN' });
+    expect(wrongPassword.status).toBe(401);
+  });
+  describe('role-based signup', () => {
+    function fakeTransaction(existingEmail = false) {
+      const clientQuery = vi.fn(async (text: string, params?: unknown[]) => {
+        if (text.startsWith('SELECT id FROM organizations')) return response([{ id: 'org-1' }]);
+        if (text.startsWith('INSERT INTO users')) {
+          if (existingEmail) throw Object.assign(new Error('duplicate'), { code: '23505' });
+          const [, email, , fullName, role] = params as string[];
+          return response([{ id: 'new-user', email, full_name: fullName, role, is_active: true }]);
+        }
+        return response([]);
+      });
+      vi.spyOn(pool, 'connect').mockResolvedValue({ query: clientQuery, release: vi.fn() } as never);
+      return clientQuery;
+    }
+    it.each([['ADMIN', 'Admin'], ['WAREHOUSE_MANAGER', 'Warehouse manager'], ['DRIVER', 'Driver']])('stores the %s role with organization and audit entry', async (code, label) => {
+      const clientQuery = fakeTransaction();
+      const res = await request(createApp(new session.MemoryStore())).post('/api/v1/auth/signup').send({ fullName: 'New Person', email: 'New@Example.com', password: 'long-enough-1', role: code });
+      expect(res.status).toBe(201);
+      expect(res.body.data.user).toMatchObject({ email: 'new@example.com', full_name: 'New Person', role: label });
+      expect(res.headers['set-cookie']).toBeDefined();
+      const statements = clientQuery.mock.calls.map(call => String(call[0]));
+      expect(statements[0]).toBe('BEGIN');
+      expect(statements.at(-1)).toBe('COMMIT');
+      const userInsert = clientQuery.mock.calls.find(call => String(call[0]).startsWith('INSERT INTO users'))!;
+      expect(userInsert[1]).toEqual(['org-1', 'new@example.com', expect.stringMatching(/^\$2[aby]\$12\$/), 'New Person', code]);
+      const audit = clientQuery.mock.calls.find(call => String(call[0]).startsWith('INSERT INTO system_audit_logs'))!;
+      expect(audit[1]).toEqual(['new-user', 'USER_SIGNUP', 'auth', JSON.stringify({ role: code })]);
+    });
+    it('defaults to DRIVER when no role is supplied', async () => {
+      const clientQuery = fakeTransaction();
+      const res = await request(createApp(new session.MemoryStore())).post('/api/v1/auth/signup').send({ fullName: 'New Person', email: 'd@example.com', password: 'long-enough-1' });
+      expect(res.status).toBe(201); expect(res.body.data.user.role).toBe('Driver');
+      expect(clientQuery.mock.calls.find(call => String(call[0]).startsWith('INSERT INTO users'))![1]).toContain('DRIVER');
+    });
+    it('rejects unknown roles without touching the database', async () => {
+      const connect = vi.spyOn(pool, 'connect');
+      const res = await request(createApp(new session.MemoryStore())).post('/api/v1/auth/signup').send({ fullName: 'New Person', email: 'x@example.com', password: 'long-enough-1', role: 'SUPERUSER' });
+      expect(res.status).toBe(400); expect(connect).not.toHaveBeenCalled();
+    });
+    it('rolls back and reports duplicate emails', async () => {
+      const clientQuery = fakeTransaction(true);
+      const res = await request(createApp(new session.MemoryStore())).post('/api/v1/auth/signup').send({ fullName: 'New Person', email: 'taken@example.com', password: 'long-enough-1', role: 'ADMIN' });
+      expect(res.status).toBe(409); expect(res.body.error.code).toBe('EMAIL_ALREADY_REGISTERED');
+      expect(clientQuery.mock.calls.map(call => call[0])).toContain('ROLLBACK');
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
   });
   it('rejects malformed JSON without returning a stack trace', async () => {
     const res = await request(createApp(new session.MemoryStore())).post('/api/v1/auth/login').set('Content-Type', 'application/json').send('{bad-json');
