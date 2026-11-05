@@ -37,19 +37,19 @@ const LEGACY_ACCOUNTS = ['admin@qorvenz.local'];
 const seedUsers: ReadonlyArray<{
   email: string;
   fullName: string;
-  role: 'ADMIN' | 'WAREHOUSE_MANAGER' | 'DRIVER';
+  role: 'ADMIN' | 'WAREHOUSE_MANAGER' | 'FLEET_MANAGER';
   projects: string[];
   warehouses: string[];
   passwordEnv: string;
 }> = [
   { email: 'admin@demo.qorvenz.test', fullName: 'Demo Administrator', role: 'ADMIN', projects: [], warehouses: [], passwordEnv: 'SEED_PASSWORD_ADMIN' },
   // Central warehouse serves both projects.
-  { email: 'warehouse.cen@demo.qorvenz.test', fullName: 'Central Warehouse Manager', role: 'WAREHOUSE_MANAGER', projects: ['PRJ-GAL', 'PRJ-MAT'], warehouses: ['WH-CENTRAL-01'], passwordEnv: 'SEED_PASSWORD_WAREHOUSE_CEN' },
+  { email: 'warehouse.cen@demo.qorvenz.test', fullName: 'Central Warehouse Manager', role: 'WAREHOUSE_MANAGER', projects: ['PRJ-GAL', 'PRJ-MAT'], warehouses: ['WH-CENTRAL-01', 'WH-MAT'], passwordEnv: 'SEED_PASSWORD_WAREHOUSE_CEN' },
   // Plan: "storekeeper.mat → WH-MAT only. This proves cross-project denial".
   // Uses WAREHOUSE_MANAGER until a STOREKEEPER role exists (Q-402).
   { email: 'storekeeper.mat@demo.qorvenz.test', fullName: 'Matara Site Storekeeper', role: 'WAREHOUSE_MANAGER', projects: ['PRJ-MAT'], warehouses: ['WH-MAT'], passwordEnv: 'SEED_PASSWORD_STOREKEEPER_MAT' },
-  { email: 'driver.1@demo.qorvenz.test', fullName: 'Driver One', role: 'DRIVER', projects: [], warehouses: [], passwordEnv: 'SEED_PASSWORD_DRIVER_1' },
-  { email: 'driver.2@demo.qorvenz.test', fullName: 'Driver Two', role: 'DRIVER', projects: [], warehouses: [], passwordEnv: 'SEED_PASSWORD_DRIVER_2' },
+  { email: 'fleet@demo.qorvenz.test', fullName: 'Fleet Manager', role: 'FLEET_MANAGER', projects: [], warehouses: [], passwordEnv: 'SEED_PASSWORD_FLEET' },
+  { email: 'warehouse.review@demo.qorvenz.test', fullName: 'Warehouse Reviewer', role: 'WAREHOUSE_MANAGER', projects: ['PRJ-GAL', 'PRJ-MAT'], warehouses: ['WH-CENTRAL-01', 'WH-MAT'], passwordEnv: 'SEED_PASSWORD_WAREHOUSE_REVIEW' },
 ];
 
 function generatePassword(): string {
@@ -110,6 +110,12 @@ async function runUserSeeds(): Promise<string[]> {
        ON CONFLICT (user_id, project_id) DO NOTHING`,
       [userId, organizationId, user.projects]
     );
+    if (user.projects.length === 0) {
+      await client.query(
+        'DELETE FROM user_project_access WHERE user_id = $1 AND organization_id = $2',
+        [userId, organizationId]
+      );
+    }
     await client.query(
       `INSERT INTO user_warehouse_access (user_id, warehouse_id, organization_id)
        SELECT $1, w.id, w.organization_id FROM warehouses w
@@ -118,6 +124,13 @@ async function runUserSeeds(): Promise<string[]> {
       [userId, organizationId, user.warehouses]
     );
   }
+  // Site grants mirror explicit project grants for fictional development fixtures.
+  await client.query(`INSERT INTO user_site_access(user_id,site_id,organization_id)
+    SELECT p.user_id,s.id,s.organization_id FROM user_project_access p JOIN sites s ON s.project_id=p.project_id
+    JOIN users u ON u.id=p.user_id WHERE u.email LIKE '%@demo.qorvenz.test'
+    ON CONFLICT DO NOTHING`);
+  await client.query(`UPDATE fleet_vehicles SET project_id=(SELECT id FROM projects WHERE code='PRJ-GAL' AND organization_id=fleet_vehicles.organization_id)
+    WHERE vehicle_number='WP-CB-4092' AND project_id IS NULL`);
   // Old 001 seed gave admin@qorvenz.local a password published in the repo. Disable any
   // account that still uses it; admin@demo.qorvenz.test replaces it.
   for (const email of LEGACY_ACCOUNTS) {

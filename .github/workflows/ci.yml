@@ -73,7 +73,7 @@ jobs:
       - name: Run API Tests (incl. real-PostgreSQL scope tests)
         env:
           SCOPE_INTEGRATION: '1'
-        run: npm run test:ci --workspace=apps/api
+        run: npm run test:ci --workspace=backend
 
       - name: Run Web Tests
         run: npm run test --workspace=frontend
@@ -83,7 +83,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: api-test-results
-          path: apps/api/test-results/
+          path: backend/test-results/
 
       - name: Build Web & API Artifacts
         run: npm run build

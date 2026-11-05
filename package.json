@@ -4,28 +4,28 @@
   "private": true,
   "description": "Qorvenz Tech – Construction Supply Chain Management & AI Automation Platform",
   "workspaces": [
-    "apps/api",
+    "backend",
     "frontend"
   ],
   "scripts": {
     "predev": "docker compose up -d --wait",
     "dev": "concurrently -n \"API,WEB\" -c \"blue,green\" \"npm run dev:api\" \"npm run dev:web\"",
-    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:api": "npm run dev --workspace=backend",
     "dev:web": "npm run dev --workspace=frontend",
-    "build": "npm run build --workspace=apps/api && npm run build --workspace=frontend",
-    "build:api": "npm run build --workspace=apps/api",
+    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
+    "build:api": "npm run build --workspace=backend",
     "build:web": "npm run build --workspace=frontend",
-    "test": "npm run test --workspace=apps/api && npm run test --workspace=frontend",
-    "test:api": "npm run test --workspace=apps/api",
+    "test": "npm run test --workspace=backend && npm run test --workspace=frontend",
+    "test:api": "npm run test --workspace=backend",
     "test:web": "npm run test --workspace=frontend",
-    "lint": "npm run lint --workspace=apps/api && npm run lint --workspace=frontend",
-    "typecheck": "npm run typecheck --workspace=apps/api && npm run typecheck --workspace=frontend",
+    "lint": "npm run lint --workspace=backend && npm run lint --workspace=frontend",
+    "typecheck": "npm run typecheck --workspace=backend && npm run typecheck --workspace=frontend",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f postgres",
-    "db:migrate": "npm run db:migrate --workspace=apps/api",
-    "db:seed": "npm run db:seed --workspace=apps/api",
-    "db:rollback": "npm run db:rollback --workspace=apps/api"
+    "db:migrate": "npm run db:migrate --workspace=backend",
+    "db:seed": "npm run db:seed --workspace=backend",
+    "db:rollback": "npm run db:rollback --workspace=backend"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
