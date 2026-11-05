@@ -11,7 +11,7 @@ dotenv.config();
 
 const client = new Client({
   host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
+  port: parseInt(process.env.DB_PORT || '5434', 10),
   user: process.env.DB_USER || 'qorvenz_user',
   password: process.env.DB_PASSWORD || 'qorvenz_dev_secret_2026',
   database: process.env.DB_NAME || 'qorvenz_db',
