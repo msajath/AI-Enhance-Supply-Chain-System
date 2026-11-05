@@ -175,3 +175,70 @@ a.button { text-decoration: none; }
   .role-option { padding: 8px; }
   .role-option strong { font-size: 12px; white-space: normal; }
 }
+
+/* ==========================================================================
+   Sign-in artwork: live operations map (components/OperationsScene.tsx)
+   Graphite panel, signal-yellow trucks, green / blue / amber event states.
+   ========================================================================== */
+.auth-visual.ops-visual { position: sticky; top: 0; height: 100vh; min-height: 0; display: block; padding: 0; overflow: hidden; color: #c9cfcb; background: radial-gradient(120% 90% at 30% 20%, #2a3036 0%, #1f2429 55%, #171b1f 100%); }
+.theme-dark .auth-visual.ops-visual { background: radial-gradient(120% 90% at 30% 20%, #1b2024 0%, #111417 60%, #0c0e10 100%); }
+.ops-visual-inner { height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; padding: 32px 40px 36px; }
+
+.ops-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 13px; color: #9aa39f; animation: fade-in 500ms ease both; }
+.ops-stat strong { color: #f3f4f1; font-family: var(--font-display); font-size: 15px; font-weight: 600; margin-right: 3px; }
+.ops-live { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border: 1px solid rgba(111, 192, 143, 0.35); border-radius: 999px; color: #8fd3a9; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.ops-live i { width: 7px; height: 7px; border-radius: 50%; background: #6fc08f; box-shadow: 0 0 0 0 rgba(111, 192, 143, 0.6); animation: live-dot 1.8s ease-out infinite; }
+
+.ops-map { width: 100%; height: 100%; min-height: 0; overflow: visible; }
+.ops-dot { fill: rgba(255, 255, 255, 0.07); }
+.ops-coast { fill: none; stroke: rgba(143, 184, 220, 0.35); stroke-width: 1.4; }
+.ops-wave { fill: none; stroke: rgba(143, 184, 220, 0.25); stroke-width: 1.2; stroke-linecap: round; animation: wave 4s ease-in-out infinite alternate; }
+.ops-road { fill: none; stroke: #3a4249; stroke-width: 7; stroke-linecap: round; }
+.ops-flow { fill: none; stroke: rgba(242, 183, 5, 0.55); stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 2 9; animation: road-flow linear infinite; }
+.ops-trailer { fill: #e8eae6; }
+.ops-cab { fill: var(--signal); }
+.ops-windscreen { fill: #1f2429; opacity: 0.7; }
+.ops-truck { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45)); }
+.ops-pulse { fill: none; stroke: var(--signal); stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; animation: arrive linear infinite; }
+
+.ops-node { animation: node-in 600ms var(--ease) both; }
+.ops-hub-glow { animation: glow 3.2s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+.ops-hub-box { fill: var(--signal); }
+.ops-hub-icon { fill: none; stroke: #1f2429; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ops-place { fill: #2a3036; stroke: #8b949a; stroke-width: 1.5; }
+.ops-place-icon { fill: none; stroke: #e8eae6; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.ops-label { fill: #f3f4f1; font: 600 14px var(--font); }
+.ops-code { fill: #8b948f; font: 500 11px var(--font); letter-spacing: 0.04em; }
+
+.ops-bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.ops-visual .ops-tagline { position: static; max-width: 24ch; margin: 0; color: #e8eae6; font-family: var(--font-display); font-size: 21px; line-height: 1.35; font-weight: 500; }
+.ops-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; width: min(340px, 52%); }
+.ops-card {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px;
+  backdrop-filter: blur(6px); font-size: 12.5px; color: #b9c0bc; transition: opacity 400ms ease;
+}
+.ops-card:nth-child(1) { opacity: 0.45; } .ops-card:nth-child(2) { opacity: 0.75; }
+.ops-card-new { animation: card-in 500ms var(--ease) both; border-color: rgba(242, 183, 5, 0.35); }
+.ops-card-dot { width: 8px; height: 8px; border-radius: 50%; background: #8fb8dc; }
+.ops-delivered .ops-card-dot { background: #6fc08f; } .ops-alert .ops-card-dot { background: #e7b85c; } .ops-dispatched .ops-card-dot { background: var(--signal); }
+.ops-card-text { display: grid; min-width: 0; }
+.ops-card-text strong { color: #f3f4f1; font-weight: 600; font-size: 13px; }
+.ops-card-text span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ops-card-time { font-size: 11.5px; color: #7d868c; white-space: nowrap; }
+
+@keyframes live-dot { 0% { box-shadow: 0 0 0 0 rgba(111, 192, 143, 0.6); } 100% { box-shadow: 0 0 0 9px rgba(111, 192, 143, 0); } }
+@keyframes road-flow { to { stroke-dashoffset: -55; } }
+@keyframes arrive { 0%, 40% { opacity: 0; transform: scale(0.6); } 43% { opacity: 0.9; transform: scale(0.8); } 58% { opacity: 0; transform: scale(2.4); } 100% { opacity: 0; } }
+@keyframes glow { from { opacity: 0.6; transform: scale(0.9); } to { opacity: 1; transform: scale(1.12); } }
+@keyframes wave { from { transform: translateX(-6px); } to { transform: translateX(6px); } }
+@keyframes node-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes card-in { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 1180px) { .ops-feed { width: min(300px, 55%); } .ops-visual .ops-tagline { font-size: 18px; } }
+@media (max-width: 900px) {
+  .auth-visual.ops-visual { height: 250px; padding: 0; }
+  .ops-visual-inner { padding: 14px 16px 10px; gap: 4px; }
+  .ops-bottom, .ops-stat:nth-of-type(n+3) { display: none; }
+  .ops-label { font-size: 16px; } .ops-code { display: none; }
+}

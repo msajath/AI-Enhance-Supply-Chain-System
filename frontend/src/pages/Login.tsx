@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { login, loginErrorMessage, requestAccess, requestErrorMessage, type AuthUser, type RequestedRole } from '../services/auth';
 import { Brand } from '../components/Brand';
 import Icon from '../components/Icon';
-import { SiteIllustration } from '../components/SiteIllustration';
+import { OperationsScene } from '../components/OperationsScene';
 
 type Theme = 'light' | 'dark';
 
@@ -18,9 +18,8 @@ export function AuthLayout({ theme, toggleTheme, children, dense = false }: { th
       <div className="auth-body">{children}</div>
       <footer className="auth-footer">© {new Date().getFullYear()} Qorvenz Technologies</footer>
     </section>
-    <aside className="auth-visual">
-      <SiteIllustration/>
-      <p>Materials, warehouses and fleet for every site, in one place.</p>
+    <aside className="auth-visual ops-visual">
+      <OperationsScene/>
     </aside>
   </main>;
 }
