@@ -8,6 +8,7 @@ import { env } from '../config/env';
 declare module 'express-session' {
   interface SessionData {
     userId?: string;
+    authVersion?: number;
   }
 }
 

@@ -33,7 +33,7 @@ export function errorHandler(
     ApiResponse.error(
       message,
       errorCode,
-      env.NODE_ENV === 'development' ? details ?? { stack: err.stack } : details
+      details
     )
   );
 }

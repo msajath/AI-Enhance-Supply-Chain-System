@@ -1,4 +1,5 @@
 import type session from 'express-session';
+import { createManagementRouter } from './routes/management.routes';
 import { createAuthRouter } from './routes/auth.routes';
 import { createOrganizationRouter } from './routes/organization.routes';
 import { createDefaultSessionStore, createSessionMiddleware } from './middleware/session';
@@ -13,6 +14,7 @@ import { AppError } from './utils/apiResponse';
 
 export function createApp(sessionStore?: session.Store): Express {
   const app = express();
+  if (env.TRUST_PROXY_HOPS) app.set('trust proxy', env.TRUST_PROXY_HOPS);
 
   // Security headers
   app.use(helmet());
@@ -39,6 +41,7 @@ export function createApp(sessionStore?: session.Store): Express {
 
   // Mount API and health routes
   app.use('/api/v1/auth', createAuthRouter(store));
+  app.use('/api/v1', createManagementRouter(createSessionMiddleware(store)));
   app.use('/api/v1', createOrganizationRouter(createSessionMiddleware(store)));
   app.use(rootRouter);
 

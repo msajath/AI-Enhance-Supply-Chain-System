@@ -30,7 +30,7 @@ describe.skipIf(!enabled)('project scope SQL against real PostgreSQL + seed data
   beforeAll(async () => {
     const { rows } = await pool.query<{ id: string; email: string }>(
       `SELECT id, email FROM users WHERE email = ANY($1::text[])`,
-      [['admin@demo.qorvenz.test', 'warehouse.cen@demo.qorvenz.test', 'storekeeper.mat@demo.qorvenz.test', 'driver.1@demo.qorvenz.test']]
+      [['admin@demo.qorvenz.test', 'warehouse.cen@demo.qorvenz.test', 'storekeeper.mat@demo.qorvenz.test', 'fleet@demo.qorvenz.test']]
     );
     expect(rows).toHaveLength(4);
     for (const { id, email } of rows) {
@@ -89,7 +89,7 @@ describe.skipIf(!enabled)('project scope SQL against real PostgreSQL + seed data
   });
 
   it('a driver has no project grants in the seed', async () => {
-    expect(await listAccessibleProjects(ctx['driver.1'])).toEqual([]);
+    expect(await listAccessibleProjects(ctx['fleet'])).toEqual([]);
   });
 
   it('dates come back as plain YYYY-MM-DD strings', async () => {

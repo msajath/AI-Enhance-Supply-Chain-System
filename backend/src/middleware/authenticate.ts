@@ -40,6 +40,7 @@ function unauthenticated(res: Response, code = 'UNAUTHENTICATED', message = 'Aut
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   let userId: string | undefined;
+  let version = req.session?.authVersion ?? 0;
   const token = bearerToken(req);
 
   if (token) {
@@ -49,6 +50,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         issuer: env.JWT_ISSUER,
         audience: env.JWT_AUDIENCE,
       }) as JwtPayload;
+      version = typeof decoded.av === 'number' ? decoded.av : 0;
       userId = typeof decoded.sub === 'string' ? decoded.sub : undefined;
     } catch (error) {
       if (error instanceof TokenExpiredError) {
@@ -69,7 +71,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   try {
     const user = await findUserForAuth(userId);
-    if (!user || !user.is_active || !isRole(user.role)) {
+    if (!user || !user.is_active || !isRole(user.role) || (user.auth_version ?? 0) !== version) {
       unauthenticated(res);
       return;
     }

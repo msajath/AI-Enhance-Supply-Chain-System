@@ -16,6 +16,7 @@ export interface AuthUserRow {
   full_name: string;
   role: string;
   is_active: boolean;
+  auth_version?: number;
   organization_id: string | null;
 }
 
@@ -43,7 +44,7 @@ export interface SiteSummary {
 export async function findUserForAuth(userId: string): Promise<AuthUserRow | undefined> {
   const result = await pool.query<AuthUserRow>(
     `/* qorvenz:auth.user */
-     SELECT id, email, full_name, role, is_active, organization_id
+     SELECT id, email, full_name, role, is_active, organization_id, auth_version
      FROM users WHERE id = $1 LIMIT 1`,
     [userId]
   );
