@@ -1,0 +1,74 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import request from 'supertest';
+import session from 'express-session';
+import { hashSync } from 'bcryptjs';
+import { pool } from '../src/config/database';
+import { createApp } from '../src/app';
+const query = vi.spyOn(pool, 'query');
+const password = 'Test-only-secret!';
+const row = { id: 'b0000000-0000-0000-0000-000000000001', email: 'member@example.com', full_name: 'Example Member', role: 'ADMIN', is_active: true, password_hash: hashSync(password, 12) };
+const response = (rows: unknown[]) => ({ rows, rowCount: rows.length, command: 'SELECT', oid: 0, fields: [] });
+beforeEach(() => { query.mockReset(); });
+describe('authentication API with isolated database and session store', () => {
+  it('rejects invalid input without querying the database', async () => {
+    const res = await request(createApp(new session.MemoryStore())).post('/api/v1/auth/login').send({ email: 'invalid', password: '' });
+    expect(res.status).toBe(400); expect(query).not.toHaveBeenCalled();
+  });
+  it('uses identical status and error for unknown email, wrong password, disabled and unsupported accounts', async () => {
+    const app = createApp(new session.MemoryStore());
+    const results = [];
+    for (const rows of [[], [row], [{ ...row, is_active: false }], [{ ...row, role: 'VIEWER' }]]) {
+      query.mockResolvedValueOnce(response(rows));
+      const res = await request(app).post('/api/v1/auth/login').send({ email: row.email, password: rows[0] === row ? 'incorrect' : password });
+      expect(res.status).toBe(401); results.push(res.body.error);
+      expect(res.headers['set-cookie']).toBeUndefined();
+    }
+    for (const error of results) expect(error).toEqual({ code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.' });
+  });
+  it('creates a cookie session, restores fresh server roles, and invalidates on logout', async () => {
+    query.mockResolvedValue(response([row]));
+    const app = createApp(new session.MemoryStore());
+    const agent = request.agent(app);
+    expect((await agent.get('/api/v1/auth/session')).status).toBe(401);
+    const login = await agent.post('/api/v1/auth/login').send({ email: row.email, password });
+    expect(login.status).toBe(200);
+    expect(login.body.data.user.role).toBe('Admin');
+    expect(login.body.data.user.password_hash).toBeUndefined();
+    expect(login.headers['set-cookie'][0]).toMatch(/HttpOnly/);
+    expect(login.headers['set-cookie'][0]).toMatch(/SameSite=Lax/);
+    const cookie = login.headers['set-cookie'][0].split(';')[0];
+    query.mockResolvedValue(response([{ ...row, role: 'DRIVER' }]));
+    const restored = await agent.get('/api/v1/auth/session');
+    expect(restored.body.data.user.role).toBe('Driver');
+    expect(restored.headers['cache-control']).toBe('no-store');
+    expect((await agent.post('/api/v1/auth/logout')).status).toBe(200);
+    expect((await request(app).get('/api/v1/auth/session').set('Cookie', cookie)).status).toBe(401);
+  });
+  it('revokes access for a disabled user', async () => {
+    query.mockResolvedValue(response([row]));
+    const agent = request.agent(createApp(new session.MemoryStore()));
+    await agent.post('/api/v1/auth/login').send({ email: row.email, password });
+    query.mockResolvedValue(response([{ ...row, is_active: false }]));
+    expect((await agent.get('/api/v1/auth/session')).status).toBe(401);
+  });
+  it('does not leak database failures', async () => {
+    query.mockRejectedValue(new Error('private SQL details'));
+    const res = await request(createApp(new session.MemoryStore())).post('/api/v1/auth/login').send({ email: row.email, password });
+    expect(res.status).toBe(503); expect(JSON.stringify(res.body)).not.toMatch(/SQL|stack|private/);
+  });
+  it('rejects cross-origin login and browser-supplied roles', async () => {
+    const app = createApp(new session.MemoryStore());
+    expect((await request(app).post('/api/v1/auth/login').set('Origin', 'https://untrusted.example').send({ email: row.email, password })).status).toBe(403);
+    expect((await request(app).post('/api/v1/auth/login').send({ email: row.email, password, role: 'ADMIN' })).status).toBe(400);
+    expect(query).not.toHaveBeenCalled();
+  });
+  it('rejects malformed JSON without returning a stack trace', async () => {
+    const res = await request(createApp(new session.MemoryStore())).post('/api/v1/auth/login').set('Content-Type', 'application/json').send('{bad-json');
+    expect(res.status).toBe(400); expect(JSON.stringify(res.body)).not.toMatch(/stack|SyntaxError/);
+  });
+  it('rate limits repeated login attempts', async () => {
+    const app = createApp(new session.MemoryStore());
+    for (let count = 0; count < 20; count++) await request(app).post('/api/v1/auth/login').send({});
+    expect((await request(app).post('/api/v1/auth/login').send({})).status).toBe(429);
+  });
+});

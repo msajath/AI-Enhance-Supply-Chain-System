@@ -1,3 +1,5 @@
+import type session from 'express-session';
+import { createAuthRouter } from './routes/auth.routes';
 import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -7,7 +9,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { rootRouter } from './routes';
 import { AppError } from './utils/apiResponse';
 
-export function createApp(): Express {
+export function createApp(sessionStore?: session.Store): Express {
   const app = express();
 
   // Security headers
@@ -31,6 +33,7 @@ export function createApp(): Express {
   app.use(requestLogger);
 
   // Mount API and health routes
+  app.use('/api/v1/auth', createAuthRouter(sessionStore));
   app.use(rootRouter);
 
   // 404 handler for undefined routes

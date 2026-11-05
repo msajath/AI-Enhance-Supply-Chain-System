@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-type Role = 'Admin' | 'Warehouse manager' | 'Driver';
+import { login, logout, restoreSession, loginErrorMessage, AuthUser } from './services/auth';
+
+type Role = AuthUser['role'];
 type IconName = 'grid' | 'box' | 'truck' | 'users' | 'chart' | 'settings' | 'search' | 'bell' | 'arrow' | 'clock' | 'pin' | 'check' | 'plus' | 'filter' | 'more' | 'menu' | 'close' | 'logout' | 'package' | 'route' | 'sun' | 'moon';
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
@@ -39,9 +41,17 @@ const stock = [
 ];
 
 function App() {
-  const [role, setRole] = useState<Role>('Admin');
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [restoring, setRestoring] = useState(true);
+  const [sessionError, setSessionError] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
+  useEffect(() => {
+    let active = true;
+    restoreSession().then(user => { if (active) setUser(user); }).catch(() => { if (active) setSessionError('Unable to restore your session. Please sign in again.'); }).finally(() => { if (active) setRestoring(false); });
+    return () => { active = false; };
+  }, []);
+  const role = user?.role ?? 'Driver';
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('qorvenz-theme') === 'dark' ? 'dark' : 'light');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [email, setEmail] = useState('');
   const [activePage, setActivePage] = useState('Overview');
   const [query, setQuery] = useState('');
@@ -51,12 +61,7 @@ function App() {
   const [completed, setCompleted] = useState(false);
   const isDriver = role === 'Driver';
   const isWarehouse = role === 'Warehouse manager';
-  const roleProfile: Record<Role, { name: string; initials: string }> = {
-    Admin: { name: 'Jordan Miller', initials: 'JM' },
-    'Warehouse manager': { name: 'Priya Shah', initials: 'PS' },
-    Driver: { name: 'Marcus Chen', initials: 'MC' },
-  };
-  const profile = roleProfile[role];
+  const profile = { name: user?.full_name ?? '', initials: (user?.full_name ?? '').split(' ').map(part => part[0]).join('').slice(0, 2) };
   const availableNavItems = role === 'Admin'
     ? navItems
     : role === 'Warehouse manager'
@@ -68,11 +73,12 @@ function App() {
   }), [query, filter]);
   const announce = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(''), 2800); };
 
-  const signIn = (selectedRole: Role) => {
-    setRole(selectedRole);
+  const signIn = (authenticatedUser: AuthUser) => {
+    setSessionError('');
+    setUser(authenticatedUser);
     setActivePage('Overview');
     setQuery('');
-    setIsAuthenticated(true);
+
   };
   const toggleTheme = () => setTheme((current) => {
     const next = current === 'light' ? 'dark' : 'light';
@@ -80,7 +86,15 @@ function App() {
     return next;
   });
 
-  if (!isAuthenticated) return <LoginPage onSignIn={signIn} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>;
+  const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try { await logout(); setUser(null); setEmail(''); setMenuOpen(false); setCompleted(false); }
+    catch { announce('Unable to sign out. Please try again.'); }
+    finally { setSigningOut(false); }
+  };
+  if (restoring) return <main className={`login-page ${theme === 'dark' ? 'theme-dark' : ''}`}><p role="status">Restoring your session...</p></main>;
+  if (!user) return <LoginPage onSignIn={signIn} sessionError={sessionError} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>;
 
   return <div className={`app-shell ${theme === 'dark' ? 'theme-dark' : ''}`}>
     <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
@@ -88,7 +102,7 @@ function App() {
       <div className="org-switch"><div className="org-icon">Q</div><div className="org-copy"><strong>Qorvenz Construction</strong><small>Enterprise workspace</small></div><span className="chevron">⌄</span></div>
       <div className="nav-label">WORKSPACE</div>
       <nav className="main-nav" aria-label="Main navigation">{availableNavItems.map((item) => <button key={item.label} className={`nav-item ${activePage === item.label ? 'selected' : ''}`} onClick={() => { setActivePage(item.label); setMenuOpen(false); }}><Icon name={item.icon}/><span>{item.label}</span>{item.label === 'Deliveries' && <span className="nav-count">8</span>}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="help-card"><div className="help-icon">✦</div><strong>Need a hand?</strong><p>Visit our help center for tips and support.</p><button onClick={() => announce('Help center is coming soon')}>Visit help center <Icon name="arrow" size={14}/></button></div><button className="profile" onClick={() => setIsAuthenticated(false)} title="Sign out"><div className="avatar profile-avatar">{profile.initials}</div><div className="profile-copy"><strong>{profile.name}</strong><small>{role} · Sign out</small></div><Icon name="logout"/></button></div>
+      <div className="sidebar-bottom"><div className="help-card"><div className="help-icon">✦</div><strong>Need a hand?</strong><p>Visit our help center for tips and support.</p><button onClick={() => announce('Help center is coming soon')}>Visit help center <Icon name="arrow" size={14}/></button></div><button className="profile" onClick={signOut} disabled={signingOut} title="Sign out"><div className="avatar profile-avatar">{profile.initials}</div><div className="profile-copy"><strong>{profile.name}</strong><small>{role} · Sign out</small></div><Icon name="logout"/></button></div>
     </aside>
     {menuOpen && <button className="scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)}/>}
     <main className="main-content">
@@ -117,27 +131,34 @@ function App() {
   </div>;
 }
 
-function LoginPage({ onSignIn, email, setEmail, theme, toggleTheme }: { onSignIn: (role: Role) => void; email: string; setEmail: (value: string) => void; theme: 'light' | 'dark'; toggleTheme: () => void }) {
-  const [selectedRole, setSelectedRole] = useState<Role>('Admin');
+function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme }: { onSignIn: (user: AuthUser) => void; sessionError: string; email: string; setEmail: (value: string) => void; theme: 'light' | 'dark'; toggleTheme: () => void }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const demoAccounts: Record<Role, { email: string; password: string }> = {
-    Admin: { email: 'admin@qorvenz.demo', password: 'Admin@123' },
-    'Warehouse manager': { email: 'warehouse@qorvenz.demo', password: 'Warehouse@123' },
-    Driver: { email: 'driver@qorvenz.demo', password: 'Driver@123' },
-  };
-  const demoAccount = demoAccounts[selectedRole];
-  const fillDemoCredentials = () => {
-    setEmail(demoAccount.email);
-    setPassword(demoAccount.password);
+  const [errors, setErrors] = useState({ email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const submitting = useRef(false);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submitting.current) return;
+    const errors = {
+      email: !email.trim() ? 'Email is required.' : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? 'Enter a valid email address.' : '',
+      password: !password ? 'Password is required.' : '',
+    };
+    setErrors(errors);
     setLoginError('');
+    if (errors.email || errors.password) {
+      document.getElementById(errors.email ? 'login-email' : 'login-password')?.focus();
+      return;
+    }
+    submitting.current = true;
+    setLoading(true);
+    const credentials = { email: email.trim(), password };
+    setPassword('');
+    try { onSignIn(await login(credentials)); }
+    catch (error) { setLoginError(loginErrorMessage(error)); }
+    finally { submitting.current = false; setLoading(false); }
   };
-  const roles: { name: Role; icon: IconName; caption: string }[] = [
-    { name: 'Admin', icon: 'grid', caption: 'Manage the whole operation' },
-    { name: 'Warehouse manager', icon: 'box', caption: 'Inventory and fulfillment' },
-    { name: 'Driver', icon: 'truck', caption: 'Routes and deliveries' },
-  ];
   return <main className={`login-page ${theme === 'dark' ? 'theme-dark' : ''}`}>
     <section className="login-story">
       <div className="login-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div>
@@ -145,14 +166,15 @@ function LoginPage({ onSignIn, email, setEmail, theme, toggleTheme }: { onSignIn
         <div className="supply-visual" aria-hidden="true"><div className="visual-grid"/><div className="visual-route route-one"/><div className="visual-route route-two"/><div className="visual-node node-warehouse"><Icon name="box" size={20}/></div><div className="visual-node node-truck"><Icon name="truck" size={20}/></div><div className="visual-node node-site"><Icon name="pin" size={20}/></div><div className="visual-caption caption-left"><span>WAREHOUSE</span><strong>Seattle North</strong></div><div className="visual-caption caption-right"><span>DELIVERY STATUS</span><strong><i/> On the way</strong></div><div className="visual-metric"><span>Today’s deliveries</span><strong>24 <small>orders</small></strong><div><i/><i/><i/><i/><i/><i/><i/><i/></div></div></div>
       </div><div className="story-footer"><span>BUILT FOR THE WORK THAT BUILDS THE WORLD</span><span>© 2026 Qorvenz Technologies</span></div>
     </section>
-    <section className="login-form-side"><button type="button" className="icon-button login-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18}/></button><div className="login-form-wrap"><div className="login-mobile-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div><div className="login-heading"><div className="eyebrow">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Choose your role and enter your account details.</p></div>
-      <form className="login-form" onSubmit={(event) => { event.preventDefault(); if (email.trim().toLowerCase() !== demoAccount.email || password !== demoAccount.password) { setLoginError(`Those credentials don’t match the ${selectedRole} demo account.`); return; } setLoginError(''); onSignIn(selectedRole); }}>
-        <fieldset className="role-picker"><legend>CONTINUE AS</legend><div className="role-cards">{roles.map((item) => <button type="button" key={item.name} className={`role-card ${selectedRole === item.name ? 'role-card-active' : ''}`} onClick={() => { setSelectedRole(item.name); setLoginError(''); }} aria-pressed={selectedRole === item.name}><span className="role-card-icon"><Icon name={item.icon} size={17}/></span><span className="role-card-copy"><strong>{item.name}</strong><small>{item.caption}</small></span><span className="role-radio"/></button>)}</div></fieldset>
-        <label className="login-label" htmlFor="login-email">Work email</label><div className="login-input-wrap"><span className="input-symbol">@</span><input id="login-email" type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com"/></div>
-        <div className="password-label-row"><label className="login-label" htmlFor="login-password">Password</label><button type="button" className="forgot-link" onClick={() => window.alert('Ask your workspace administrator to reset your password.')}>Forgot password?</button></div><div className="login-input-wrap"><span className="input-symbol password-dots">•••</span><input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password"/><button type="button" className="show-password" onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button></div>
-        <div className="demo-credentials"><div><span>DEMO CREDENTIALS</span><strong>{demoAccount.email}</strong><small>{demoAccount.password}</small></div><button type="button" onClick={fillDemoCredentials}>Use demo login</button></div>
+    <section className="login-form-side"><button type="button" className="icon-button login-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18}/></button><div className="login-form-wrap"><div className="login-mobile-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div><div className="login-heading"><div className="eyebrow">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Enter your account details to continue.</p></div>
+      {sessionError && <p className="login-error" role="status">{sessionError}</p>}
+      <form className="login-form" noValidate onSubmit={submit} aria-busy={loading}>
+        <label className="login-label" htmlFor="login-email">Work email</label><div className="login-input-wrap"><span className="input-symbol">@</span><input id="login-email" aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined} disabled={loading} type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com"/></div>
+        {errors.email && <p id="email-error" className="login-error" role="alert">{errors.email}</p>}
+        <div className="password-label-row"><label className="login-label" htmlFor="login-password">Password</label><button type="button" className="forgot-link" onClick={() => window.alert('Ask your workspace administrator to reset your password.')}>Forgot password?</button></div><div className="login-input-wrap"><span className="input-symbol password-dots">•••</span><input id="login-password" aria-invalid={!!errors.password} aria-describedby={errors.password ? "password-error" : undefined} disabled={loading} type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password"/><button type="button" className="show-password" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button></div>
+        {errors.password && <p id="password-error" className="login-error" role="alert">{errors.password}</p>}
         {loginError && <div className="login-error" role="alert">{loginError}</div>}
-        <label className="remember-row"><input type="checkbox"/><span className="custom-checkbox"/><span>Keep me signed in</span></label><button type="submit" className="login-submit">Sign in as {selectedRole}<Icon name="arrow" size={16}/></button>
+        <button type="submit" className="login-submit" disabled={loading}>{loading ? <><span className="login-spinner" aria-hidden="true"/> Signing in...</> : <>Sign in<Icon name="arrow" size={16}/></>}</button>
       </form><div className="login-note"><Icon name="check" size={14}/><span>Secure access for your Qorvenz workspace</span></div>
     </div><div className="login-mobile-footer">© 2026 Qorvenz Technologies</div></section>
   </main>;

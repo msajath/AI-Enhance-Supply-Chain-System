@@ -9,6 +9,14 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  if (req.originalUrl.split('?')[0].startsWith('/api/v1/auth/')) {
+    const invalidJson = (err as Error & { type?: string }).type === 'entity.parse.failed';
+    res.status(invalidJson ? 400 : 503).json(ApiResponse.error(
+      invalidJson ? 'Enter valid request data.' : 'Authentication service is unavailable.',
+      invalidJson ? 'INVALID_INPUT' : 'AUTH_UNAVAILABLE'
+    ));
+    return;
+  }
   const isAppError = err instanceof AppError;
   const statusCode = isAppError ? err.statusCode : 500;
   const errorCode = isAppError ? err.errorCode : 'INTERNAL_SERVER_ERROR';

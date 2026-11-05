@@ -19,7 +19,7 @@ VALUES (
     'b0000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
     'admin@qorvenz.local',
-    '$2b$10$r8jR1.aRjR0M8Q11d5X87OQ6m.5Oq1y8v2q9kM9N9X5k9N5k9N5k9',
+    '$2b$12$h7/e8QYCu.Aq3n2DM7YvVen87RPxyxyHWCbFhvezEuI3PusgoWhcy',
     'System Administrator',
     'ADMIN'
 )
