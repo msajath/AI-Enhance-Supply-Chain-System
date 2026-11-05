@@ -52,7 +52,7 @@ Review and adjust ports or credentials if necessary:
 PORT=4000
 NODE_ENV=development
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=5434
 DB_USER=qorvenz_user
 DB_PASSWORD=qorvenz_dev_secret_2026
 DB_NAME=qorvenz_db

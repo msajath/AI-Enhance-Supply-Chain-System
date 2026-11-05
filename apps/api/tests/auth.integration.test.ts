@@ -31,6 +31,11 @@ describe.skipIf(!enabled)('real PostgreSQL authentication integration', () => {
     expect((await request(second).get('/api/v1/auth/session').set('Cookie', cookie)).status).toBe(200);
     const wrong = await request(second).post('/api/v1/auth/login').send({ email, password: 'wrong-password' });
     const unknown = await request(second).post('/api/v1/auth/login').send({ email: 'unknown@example.com', password });
+    const wrongRole = await request(second).post('/api/v1/auth/login').send({ email, password, role: 'ADMIN' });
+    expect(wrongRole.status).toBe(403); expect(wrongRole.body.error.code).toBe('ROLE_MISMATCH');
+    expect(wrongRole.headers['set-cookie']).toBeUndefined();
+    const rightRole = await request(second).post('/api/v1/auth/login').send({ email, password, role: 'DRIVER' });
+    expect(rightRole.status).toBe(200);
     expect(wrong.status).toBe(401); expect(unknown.status).toBe(401); expect(wrong.body.error).toEqual(unknown.body.error);
     expect((await request(second).post('/api/v1/auth/logout').set('Cookie', cookie)).status).toBe(200);
     expect((await request(first).get('/api/v1/auth/session').set('Cookie', cookie)).status).toBe(401);
