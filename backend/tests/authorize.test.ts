@@ -43,7 +43,7 @@ describe('requireRole', () => {
     expect(res.body).toMatchObject({ success: false, error: { code: 'FORBIDDEN' } });
     expect(db.audits).toEqual([{
       actorId: users.driverA.id,
-      metadata: { reason: 'ROLE_NOT_PERMITTED', method: 'GET', path: '/api/v1/projects', role: 'DRIVER', requiredRoles: ['ADMIN', 'WAREHOUSE_MANAGER'] },
+      metadata: { reason: 'ROLE_NOT_PERMITTED', method: 'GET', path: '/api/v1/projects', role: 'FLEET_MANAGER', requiredRoles: ['ADMIN', 'WAREHOUSE_MANAGER'] },
     }]);
   });
 

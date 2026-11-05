@@ -6,13 +6,15 @@ import App from './App';
 import { apiClient } from './services/api';
 import { loginErrorMessage } from './services/auth';
 
-const user = { id: 'u1', email: 'member@example.com', full_name: 'Test Member', role: 'Driver' };
+const user = { id: 'u1', email: 'member@example.com', full_name: 'Test Member', role: 'Fleet manager' };
 const post = vi.spyOn(apiClient, 'post');
 const get = vi.spyOn(apiClient, 'get');
 async function renderLogin() { render(<App/>); await screen.findByRole('heading', { name: 'Sign in to your workspace' }); }
 const failure = (status?: number, code?: string) => new AxiosError('private database details', code, undefined, undefined,
   status ? { status, data: { error: 'account exists' }, statusText: '', headers: new AxiosHeaders(), config: { headers: new AxiosHeaders() } } : undefined);
-beforeEach(() => { post.mockReset(); get.mockRejectedValue(failure(401)); localStorage.clear(); });
+const otherData=(url:string)=>url.endsWith('/context')?{projects:[],sites:[],warehouses:[],organization:{id:'org',name:'Test organization'},permissions:[]}:url.endsWith('/dashboard')?{cards:[],activity:[],alerts:[]}:{rows:[]};
+function restored() { get.mockImplementation(async url=>({data:{success:true,data:String(url).includes('/auth/')?{user}:otherData(String(url))}})); }
+beforeEach(() => { window.history.replaceState({},'', '/login'); post.mockReset();get.mockImplementation(async url=>{if(String(url).includes('/auth/'))throw failure(401);return {data:{success:true,data:otherData(String(url))}};}); localStorage.clear(); });
 async function fill() {
   const keyboard = userEvent.setup();
   await keyboard.type(screen.getByLabelText('Work email'), 'member@example.com');
@@ -91,11 +93,11 @@ describe('login', () => {
 
 describe('session lifecycle', () => {
   it('restores an authenticated user before rendering the dashboard', async () => {
-    get.mockResolvedValue({ data: { success: true, data: { user } } });
+    restored();
     render(<App/>);
     expect(screen.getByRole('status')).toHaveTextContent('Restoring your session');
     await screen.findByRole('heading', { name: /Good morning, Test/ });
-    expect(get).toHaveBeenCalledWith('/api/v1/auth/session', { withCredentials: true });
+    expect(get).toHaveBeenCalledWith('/api/v1/auth/me', { withCredentials: true });
   });
   it('reports restoration failures without displaying protected content', async () => {
     get.mockRejectedValue(failure(503));
@@ -104,7 +106,7 @@ describe('session lifecycle', () => {
     expect(screen.queryByRole('heading', { name: /Good morning/ })).not.toBeInTheDocument();
   });
   it('invalidates the backend session before clearing authentication', async () => {
-    get.mockResolvedValue({ data: { success: true, data: { user } } });
+    restored();
     post.mockResolvedValue({ data: { success: true } });
     render(<App/>);
     await screen.findByRole('heading', { name: /Good morning/ });
@@ -113,12 +115,12 @@ describe('session lifecycle', () => {
     expect(post).toHaveBeenCalledWith('/api/v1/auth/logout', {}, { withCredentials: true });
   });
   it('keeps the session visible and reports failed logout', async () => {
-    get.mockResolvedValue({ data: { success: true, data: { user } } });
+    restored();
     post.mockRejectedValue(failure(503));
     render(<App/>);
     await screen.findByRole('heading', { name: /Good morning/ });
     await userEvent.click(screen.getByTitle('Sign out'));
-    expect(await screen.findByText('Unable to sign out. Please try again.')).toBeVisible();
+    expect(await screen.findByText('Unable to load or save data. Please try again.')).toBeVisible();
     expect(screen.getByRole('heading', { name: /Good morning/ })).toBeVisible();
   });
 });

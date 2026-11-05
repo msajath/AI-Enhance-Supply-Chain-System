@@ -13,6 +13,7 @@ const envSchema = z.object({
   PORT: z.string().default('4000').transform((val) => parseInt(val, 10)),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   DB_HOST: z.string().default('localhost'),
   DB_PORT: z.string().default('5434').transform((val) => parseInt(val, 10)),
@@ -38,3 +39,5 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export type Env = z.infer<typeof envSchema>;
+
+if (env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || env.JWT_SECRET.startsWith('qorvenz_super_secret'))) throw new Error('Set a unique JWT_SECRET in production.');

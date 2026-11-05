@@ -23,7 +23,7 @@ export const users = {
   adminA: { id: 'b0000000-0000-0000-0000-0000000000a0', email: 'admin.a@example.com', full_name: 'Admin A', role: 'ADMIN', organization_id: ORG_A, is_active: true },
   managerA1: { id: 'b0000000-0000-0000-0000-0000000000a1', email: 'wm.a1@example.com', full_name: 'Manager A1', role: 'WAREHOUSE_MANAGER', organization_id: ORG_A, is_active: true },
   managerNoGrants: { id: 'b0000000-0000-0000-0000-0000000000a2', email: 'wm.none@example.com', full_name: 'Manager None', role: 'WAREHOUSE_MANAGER', organization_id: ORG_A, is_active: true },
-  driverA: { id: 'b0000000-0000-0000-0000-0000000000a3', email: 'driver.a@example.com', full_name: 'Driver A', role: 'DRIVER', organization_id: ORG_A, is_active: true },
+  driverA: { id: 'b0000000-0000-0000-0000-0000000000a3', email: 'driver.a@example.com', full_name: 'Driver A', role: 'FLEET_MANAGER', organization_id: ORG_A, is_active: true },
   disabledAdmin: { id: 'b0000000-0000-0000-0000-0000000000a4', email: 'off@example.com', full_name: 'Disabled', role: 'ADMIN', organization_id: ORG_A, is_active: false },
   noCompany: { id: 'b0000000-0000-0000-0000-0000000000a5', email: 'nocompany@example.com', full_name: 'No Company', role: 'WAREHOUSE_MANAGER', organization_id: null, is_active: true },
   adminB: { id: 'b0000000-0000-0000-0000-0000000000b0', email: 'admin.b@example.com', full_name: 'Admin B', role: 'ADMIN', organization_id: ORG_B, is_active: true },
