@@ -4,6 +4,8 @@ import session from 'express-session';
 import { hashSync } from 'bcryptjs';
 import { pool } from '../src/config/database';
 import { createApp } from '../src/app';
+import jwt from 'jsonwebtoken';
+import { env } from '../src/config/env';
 const query = vi.spyOn(pool, 'query');
 const password = 'Test-only-secret!';
 const row = { id: 'b0000000-0000-0000-0000-000000000001', email: 'member@example.com', full_name: 'Example Member', role: 'ADMIN', is_active: true, password_hash: hashSync(password, 12) };
@@ -32,6 +34,12 @@ describe('authentication API with isolated database and session store', () => {
     expect((await agent.get('/api/v1/auth/session')).status).toBe(401);
     const login = await agent.post('/api/v1/auth/login').send({ email: row.email, password });
     expect(login.status).toBe(200);
+    const token = login.body.data.accessToken;
+    expect(typeof token).toBe('string');
+    const claims = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'], issuer: env.JWT_ISSUER, audience: env.JWT_AUDIENCE }) as jwt.JwtPayload;
+    expect(claims).toMatchObject({ sub: row.id, iss: env.JWT_ISSUER, aud: env.JWT_AUDIENCE });
+    expect(claims.exp).toBeTypeOf('number');
+    expect(Object.keys(claims).sort()).toEqual(['aud', 'exp', 'iat', 'iss', 'sub']);
     expect(login.body.data.user.role).toBe('Admin');
     expect(login.body.data.user.password_hash).toBeUndefined();
     expect(login.headers['set-cookie'][0]).toMatch(/HttpOnly/);
@@ -43,6 +51,15 @@ describe('authentication API with isolated database and session store', () => {
     expect(restored.headers['cache-control']).toBe('no-store');
     expect((await agent.post('/api/v1/auth/logout')).status).toBe(200);
     expect((await request(app).get('/api/v1/auth/session').set('Cookie', cookie)).status).toBe(401);
+  });
+  it('accepts a valid bearer token and rejects modified tokens', async () => {
+    query.mockResolvedValue(response([row]));
+    const app = createApp(new session.MemoryStore());
+    const login = await request(app).post('/api/v1/auth/login').send({ email: row.email, password });
+    const token = login.body.data.accessToken as string;
+    query.mockResolvedValue(response([row]));
+    expect((await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${token}`)).status).toBe(200);
+    expect((await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${token}tampered`)).status).toBe(401);
   });
   it('revokes access for a disabled user', async () => {
     query.mockResolvedValue(response([row]));

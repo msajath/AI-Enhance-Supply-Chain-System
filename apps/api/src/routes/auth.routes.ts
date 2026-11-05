@@ -5,6 +5,7 @@ import { compare, hashSync } from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
+import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
 import { pool } from '../config/database';
 import { env } from '../config/env';
 import { ApiResponse } from '../utils/apiResponse';
@@ -16,6 +17,35 @@ const devSecret = randomBytes(32).toString('hex');
 const dummyHash = hashSync(randomBytes(32).toString('hex'), 12);
 const roleNames: Record<string, string> = { ADMIN: 'Admin', WAREHOUSE_MANAGER: 'Warehouse manager', DRIVER: 'Driver' };
 const credentialsSchema = z.object({ email: z.string().trim().email().max(255), password: z.string().min(1).max(72).refine(value => Buffer.byteLength(value, 'utf8') <= 72) }).strict();
+const jwtSignOptions: SignOptions = {
+  algorithm: 'HS256',
+  expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
+  issuer: env.JWT_ISSUER,
+  audience: env.JWT_AUDIENCE,
+};
+
+function publicUser(row: { id: string; email: string; full_name: string; role: string }) {
+  return { id: row.id, email: row.email, full_name: row.full_name, role: roleNames[row.role] };
+}
+
+function bearerToken(req: import('express').Request): string | undefined {
+  const header = req.get('Authorization');
+  return header?.startsWith('Bearer ') ? header.slice(7).trim() : undefined;
+}
+
+async function authenticatedUser(req: import('express').Request) {
+  const token = bearerToken(req);
+  if (!token) return undefined;
+  const decoded = jwt.verify(token, env.JWT_SECRET, {
+    algorithms: ['HS256'],
+    issuer: env.JWT_ISSUER,
+    audience: env.JWT_AUDIENCE,
+  }) as JwtPayload;
+  if (typeof decoded.sub !== 'string') return undefined;
+  const result = await pool.query('SELECT id, email, full_name, role, is_active FROM users WHERE id = $1 LIMIT 1', [decoded.sub]);
+  const row = result.rows[0];
+  return row?.is_active && roleNames[row.role] ? row : undefined;
+}
 
 export function createAuthRouter(store?: session.Store) {
   const router = Router();
@@ -48,7 +78,14 @@ export function createAuthRouter(store?: session.Store) {
       await new Promise<void>((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
       req.session.userId = row.id;
       await new Promise<void>((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
-      res.json(ApiResponse.success({ user: { id: row.id, email: row.email, full_name: row.full_name, role } }));
+      const accessToken = jwt.sign({ sub: row.id }, env.JWT_SECRET, jwtSignOptions);
+      const tokenPayload = jwt.decode(accessToken) as JwtPayload;
+      res.json(ApiResponse.success({
+        accessToken,
+        tokenType: 'Bearer',
+        expiresIn: (tokenPayload.exp ?? 0) - (tokenPayload.iat ?? 0),
+        user: publicUser(row),
+      }, 'Login successful'));
     } catch { res.status(503).json(ApiResponse.error('Sign-in service is unavailable. Please try again later.', 'AUTH_UNAVAILABLE')); }
   });
   router.get('/session', async (req, res) => {
@@ -62,8 +99,20 @@ export function createAuthRouter(store?: session.Store) {
         res.clearCookie(cookieName, { path: cookie.path, httpOnly: cookie.httpOnly, secure: cookie.secure, sameSite: cookie.sameSite });
         res.status(401).json(ApiResponse.error('Authentication required.', 'UNAUTHENTICATED')); return;
       }
-      res.json(ApiResponse.success({ user: { id: row.id, email: row.email, full_name: row.full_name, role } }));
+      res.json(ApiResponse.success({ user: publicUser(row) }));
     } catch { res.status(503).json(ApiResponse.error('Session service is unavailable.', 'AUTH_UNAVAILABLE')); }
+  });
+  router.get('/me', async (req, res) => {
+    try {
+      const row = await authenticatedUser(req);
+      if (!row) {
+        res.status(401).json(ApiResponse.error('Authentication required.', 'UNAUTHENTICATED'));
+        return;
+      }
+      res.json(ApiResponse.success({ user: publicUser(row) }));
+    } catch {
+      res.status(401).json(ApiResponse.error('Authentication required.', 'UNAUTHENTICATED'));
+    }
   });
   router.post('/logout', (req, res) => {
     req.session.destroy(error => {
