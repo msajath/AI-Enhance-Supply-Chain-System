@@ -162,33 +162,121 @@ function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme
   };
   if (signupMode) return <SignupPage onSignIn={onSignIn} theme={theme} toggleTheme={toggleTheme} onBackToLogin={() => setSignupMode(false)}/>;
   return <main className={`login-page ${theme === 'dark' ? 'theme-dark' : ''}`}>
-    <section className="login-story">
-      <div className="login-story-glow" aria-hidden="true" />
-      <div className="login-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div>
-      <div className="story-content"><div className="story-eyebrow"><span/> ONE CONNECTED OPERATION</div><h1>Every move,<br/>moving <em>forward.</em></h1><p>Bring materials, people, and deliveries together in one clear view of your supply chain.</p>
-        <div className="supply-visual" aria-hidden="true"><div className="visual-grid"/><div className="visual-route route-one"/><div className="visual-route route-two"/><div className="visual-node node-warehouse"><Icon name="box" size={20}/></div><div className="visual-node node-truck"><Icon name="truck" size={20}/></div><div className="visual-node node-site"><Icon name="pin" size={20}/></div><div className="visual-caption caption-left"><span>WAREHOUSE</span><strong>Seattle North</strong></div><div className="visual-caption caption-right"><span>DELIVERY STATUS</span><strong><i/> On the way</strong></div><div className="visual-metric"><span>Today’s deliveries</span><strong>24 <small>orders</small></strong><div><i/><i/><i/><i/><i/><i/><i/><i/></div></div></div>
-        <div className="story-trust-pills" aria-hidden="true">
-          <div className="trust-pill"><Icon name="check" size={13}/> 99.8% On-time</div>
-          <div className="trust-pill"><Icon name="clock" size={13}/> Live telemetry</div>
-          <div className="trust-pill"><Icon name="package" size={13}/> Enterprise ready</div>
+    <div className="auth-ambient-glow" aria-hidden="true" />
+    <div className="auth-grid-overlay" aria-hidden="true" />
+    <header className="auth-navbar">
+      <div className="auth-nav-brand">
+        <div className="brand-mark">q<span>.</span></div>
+        <div className="brand-copy">
+          <strong>qorvenz</strong>
+          <small>SUPPLY CHAIN</small>
         </div>
-      </div><div className="story-footer"><span>BUILT FOR THE WORK THAT BUILDS THE WORLD</span><span>© 2026 Qorvenz Technologies</span></div>
-    </section>
-    <section className="login-form-side">
-      <div className="login-top-bar">
-        <button type="button" className="icon-button login-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18}/></button>
       </div>
-      <div className="login-form-wrap"><div className="login-mobile-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div><div className="login-heading"><div className="eyebrow">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Enter your account details to continue.</p></div>
-      {sessionError && <p className="login-error" role="status">{sessionError}</p>}
-      <form className="login-form" noValidate onSubmit={submit} aria-busy={loading}>
-        <label className="login-label" htmlFor="login-email">Work email</label><div className="login-input-wrap"><span className="input-symbol">@</span><input id="login-email" aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined} disabled={loading} type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com"/></div>
-        {errors.email && <p id="email-error" className="login-error" role="alert">{errors.email}</p>}
-        <div className="password-label-row"><label className="login-label" htmlFor="login-password">Password</label><button type="button" className="forgot-link" onClick={() => window.alert('Ask your workspace administrator to reset your password.')}>Forgot password?</button></div><div className="login-input-wrap"><span className="input-symbol password-dots">•••</span><input id="login-password" aria-invalid={!!errors.password} aria-describedby={errors.password ? "password-error" : undefined} disabled={loading} type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password"/><button type="button" className="show-password" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button></div>
-        {errors.password && <p id="password-error" className="login-error" role="alert">{errors.password}</p>}
-        {loginError && <div className="login-error" role="alert">{loginError}</div>}
-        <button type="submit" className="login-submit" disabled={loading}>{loading ? <><span className="login-spinner" aria-hidden="true"/> Signing in...</> : <>Sign in<Icon name="arrow" size={16}/></>}</button>
-      </form><div className="login-note"><Icon name="check" size={14}/><span>Secure access for your Qorvenz workspace</span></div><button type="button" className="auth-switch" onClick={() => setSignupMode(true)}>New to Qorvenz? <strong>Create an account</strong></button>
-    </div><div className="login-mobile-footer">© 2026 Qorvenz Technologies</div></section>
+      <div className="auth-nav-actions">
+        <span className="live-status-pill"><i className="online-dot" /> All systems normal</span>
+        <button
+          type="button"
+          className="icon-button theme-toggle auth-theme-btn"
+          onClick={toggleTheme}
+          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+          title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+        >
+          <Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} />
+        </button>
+      </div>
+    </header>
+
+    <div className="auth-container">
+      <div className="login-form-wrap">
+        <div className="auth-card-badge">
+          <div className="auth-logo-badge">
+            <Icon name="truck" size={20} />
+          </div>
+          <span className="eyebrow">WORKSPACE PORTAL</span>
+        </div>
+        <div className="login-heading">
+          <h2>Sign in to your workspace</h2>
+          <p>Welcome back. Enter your credentials to access operations.</p>
+        </div>
+        {sessionError && <p className="login-error" role="status">{sessionError}</p>}
+        <form className="login-form" noValidate onSubmit={submit} aria-busy={loading}>
+          <label className="login-label" htmlFor="login-email">Work email</label>
+          <div className="login-input-wrap">
+            <span className="input-symbol">@</span>
+            <input
+              id="login-email"
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? "email-error" : undefined}
+              disabled={loading}
+              type="email"
+              autoComplete="username"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@company.com"
+            />
+          </div>
+          {errors.email && <p id="email-error" className="login-error" role="alert">{errors.email}</p>}
+          <div className="password-label-row">
+            <label className="login-label" htmlFor="login-password">Password</label>
+            <button
+              type="button"
+              className="forgot-link"
+              onClick={() => window.alert('Ask your workspace administrator to reset your password.')}
+            >
+              Forgot password?
+            </button>
+          </div>
+          <div className="login-input-wrap">
+            <span className="input-symbol password-dots">•••</span>
+            <input
+              id="login-password"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
+              disabled={loading}
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Enter your password"
+            />
+            <button
+              type="button"
+              className="show-password"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          {errors.password && <p id="password-error" className="login-error" role="alert">{errors.password}</p>}
+          {loginError && <div className="login-error" role="alert">{loginError}</div>}
+          <button type="submit" className="login-submit" disabled={loading}>
+            {loading ? <><span className="login-spinner" aria-hidden="true" /> Signing in...</> : <>Sign in<Icon name="arrow" size={16} /></>}
+          </button>
+        </form>
+        <div className="login-note">
+          <Icon name="check" size={14} />
+          <span>256-bit encrypted · SOC 2 compliant security</span>
+        </div>
+        <button type="button" className="auth-switch" onClick={() => setSignupMode(true)}>
+          New to Qorvenz? <strong>Create an account</strong>
+        </button>
+      </div>
+
+      <div className="auth-features-strip" aria-hidden="true">
+        <div className="auth-feature-chip"><Icon name="truck" size={14} /> Real-time Fleet Telemetry</div>
+        <div className="auth-feature-chip"><Icon name="box" size={14} /> Automated Stock Balancing</div>
+        <div className="auth-feature-chip"><Icon name="chart" size={14} /> Predictive Delivery ETAs</div>
+      </div>
+    </div>
+
+    <footer className="auth-footer">
+      <span>Built for the teams that build the modern world</span>
+      <span>© 2026 Qorvenz Technologies Inc.</span>
+    </footer>
   </main>;
 }
 
@@ -210,27 +298,98 @@ function SignupPage({ onSignIn, theme, toggleTheme, onBackToLogin }: { onSignIn:
     finally { setLoading(false); }
   };
   return <main className={`login-page ${theme === 'dark' ? 'theme-dark' : ''}`}>
-    <section className="login-story">
-      <div className="login-story-glow" aria-hidden="true" />
-      <div className="login-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div>
-      <div className="story-content">
-        <div className="story-eyebrow"><span/> ONE CONNECTED OPERATION</div>
-        <h1>Build better,<br/>move <em>together.</em></h1>
-        <p>Bring your team, materials, and deliveries together in one clear view.</p>
-        <div className="story-trust-pills" aria-hidden="true">
-          <div className="trust-pill"><Icon name="check" size={13}/> Dispatch & Routes</div>
-          <div className="trust-pill"><Icon name="box" size={13}/> Warehouse stock</div>
-          <div className="trust-pill"><Icon name="chart" size={13}/> Live analytics</div>
+    <div className="auth-ambient-glow" aria-hidden="true" />
+    <div className="auth-grid-overlay" aria-hidden="true" />
+    <header className="auth-navbar">
+      <div className="auth-nav-brand">
+        <div className="brand-mark">q<span>.</span></div>
+        <div className="brand-copy">
+          <strong>qorvenz</strong>
+          <small>SUPPLY CHAIN</small>
         </div>
       </div>
-      <div className="story-footer"><span>BUILT FOR THE WORK THAT BUILDS THE WORLD</span><span>© 2026 Qorvenz Technologies</span></div>
-    </section>
-    <section className="login-form-side">
-      <div className="login-top-bar">
-        <button type="button" className="icon-button login-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18}/></button>
+      <div className="auth-nav-actions">
+        <span className="live-status-pill"><i className="online-dot" /> All systems normal</span>
+        <button
+          type="button"
+          className="icon-button theme-toggle auth-theme-btn"
+          onClick={toggleTheme}
+          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+          title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+        >
+          <Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} />
+        </button>
       </div>
-      <div className="login-form-wrap"><div className="login-mobile-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div><div className="login-heading"><div className="eyebrow">GET STARTED</div><h2>Create your workspace account</h2><p>Join your team and manage your supply chain.</p></div>
-      <form className="login-form" noValidate onSubmit={submit} aria-busy={loading}><label className="login-label" htmlFor="signup-name">Full name</label><div className="login-input-wrap"><input id="signup-name" disabled={loading} autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Your full name"/></div><label className="login-label" htmlFor="signup-email">Work email</label><div className="login-input-wrap"><span className="input-symbol">@</span><input id="signup-email" disabled={loading} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com"/></div><label className="login-label" htmlFor="signup-password">Password</label><div className="login-input-wrap"><input id="signup-password" disabled={loading} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters"/></div>{error && <div className="login-error" role="alert">{error}</div>}<button type="submit" className="login-submit" disabled={loading}>{loading ? 'Creating account...' : <>Create account<Icon name="arrow" size={16}/></>}</button></form><div className="login-note"><Icon name="check" size={14}/><span>Your account starts with Driver access</span></div><button type="button" className="auth-switch" onClick={onBackToLogin}>Already have an account? <strong>Sign in</strong></button></div><div className="login-mobile-footer">© 2026 Qorvenz Technologies</div></section>
+    </header>
+
+    <div className="auth-container">
+      <div className="login-form-wrap">
+        <div className="auth-card-badge">
+          <div className="auth-logo-badge">
+            <Icon name="users" size={20} />
+          </div>
+          <span className="eyebrow">GET STARTED</span>
+        </div>
+        <div className="login-heading">
+          <h2>Create your workspace account</h2>
+          <p>Join your operations team and start managing supply chain flow.</p>
+        </div>
+        <form className="login-form" noValidate onSubmit={submit} aria-busy={loading}>
+          <label className="login-label" htmlFor="signup-name">Full name</label>
+          <div className="login-input-wrap">
+            <input
+              id="signup-name"
+              disabled={loading}
+              autoComplete="name"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Alex Morgan"
+            />
+          </div>
+          <label className="login-label" htmlFor="signup-email">Work email</label>
+          <div className="login-input-wrap">
+            <span className="input-symbol">@</span>
+            <input
+              id="signup-email"
+              disabled={loading}
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="alex@company.com"
+            />
+          </div>
+          <label className="login-label" htmlFor="signup-password">Password</label>
+          <div className="login-input-wrap">
+            <input
+              id="signup-password"
+              disabled={loading}
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="At least 8 characters"
+            />
+          </div>
+          {error && <div className="login-error" role="alert">{error}</div>}
+          <button type="submit" className="login-submit" disabled={loading}>
+            {loading ? 'Creating account...' : <>Create account<Icon name="arrow" size={16} /></>}
+          </button>
+        </form>
+        <div className="login-note">
+          <Icon name="check" size={14} />
+          <span>New accounts start with Driver & Fleet Dispatch access</span>
+        </div>
+        <button type="button" className="auth-switch" onClick={onBackToLogin}>
+          Already have an account? <strong>Sign in</strong>
+        </button>
+      </div>
+    </div>
+
+    <footer className="auth-footer">
+      <span>Built for the teams that build the modern world</span>
+      <span>© 2026 Qorvenz Technologies Inc.</span>
+    </footer>
   </main>;
 }
 
