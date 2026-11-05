@@ -127,3 +127,51 @@ a.button { text-decoration: none; }
   .manage-toolbar { padding: 14px 16px; }
   .table-footer { flex-direction: column; align-items: flex-start; }
 }
+
+/* ---------- request an account (pages/Login.tsx) ----------
+   Two-column form so everything fits on one screen (no scrolling) on laptops and desktops. */
+.login-dense .auth-panel { padding-block: 20px; }
+.login-dense .auth-body { max-width: 440px; padding: 16px 0; }
+.login-dense .auth-title { font-size: 24px; }
+.login-dense .auth-lead { margin-top: 4px; font-size: 14px; }
+.auth-form.request-form { margin-top: 18px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 14px; }
+.request-form .field { gap: 4px; min-width: 0; align-content: start; }
+.request-form .field label, .role-picker legend { font-size: 13px; font-weight: 600; }
+.request-form .field input { height: 40px; font-size: 14.5px; }
+.request-form .field-hint, .request-form .field-error { font-size: 12px; line-height: 1.35; }
+.field-wide { grid-column: 1 / -1; }
+.request-form .button-block { height: 42px; margin-top: 4px; }
+.login-dense .auth-switch { margin-top: 16px; padding-top: 14px; }
+.request-done { width: 44px; height: 44px; display: grid; place-items: center; margin-bottom: 18px; border-radius: 50%; background: var(--signal); color: var(--signal-ink); animation: toast-in 260ms var(--ease) both; }
+.request-back { margin-top: 28px; }
+.auth-lead strong { color: var(--graphite); }
+
+.role-picker { margin: 0; padding: 0; border: 0; min-width: 0; }
+.role-picker legend { padding: 0; margin-bottom: 6px; }
+.role-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.role-option {
+  position: relative; display: grid; align-content: start; gap: 4px; min-width: 0; padding: 9px 10px;
+  border: 1px solid var(--rule); border-radius: var(--r-control); background: var(--paper); cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+.role-option input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.role-option svg { flex: none; color: var(--steel); transition: color 150ms ease; }
+.role-option span { display: grid; min-width: 0; line-height: 1.25; }
+.role-option strong { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.role-option small { font-size: 11.5px; color: var(--steel); }
+.role-option:hover { border-color: var(--steel-light); }
+.role-option.selected { border-color: var(--graphite); background: var(--signal-soft); box-shadow: inset 0 0 0 1px var(--graphite); }
+.role-option.selected svg { color: var(--graphite); }
+.role-option:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.role-picker:disabled .role-option { opacity: 0.6; cursor: wait; }
+
+@media (max-width: 900px) {
+  /* phones and small tablets: drop the drawing on this page so the form fits on screen */
+  .login-dense { grid-template-rows: 1fr; }
+  .login-dense .auth-visual { display: none; }
+  .login-dense .auth-panel { padding: 16px; }
+}
+@media (max-width: 430px) {
+  .role-option { padding: 8px; }
+  .role-option strong { font-size: 12px; white-space: normal; }
+}

@@ -36,7 +36,7 @@ export function ResourcePage({resource,context,onChanged,scope}:{resource:Resour
   read<{rows:Row[]}>(resource.path).then(data=>{if(active)setRows(data.rows);}).catch(e=>{if(active)setError(errorMessage(e));}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};
  },[resource.path,revision]);
  useEffect(()=>{let active=true;const loads:Promise<unknown>[]=[];
-  if(resource.path.startsWith('fleet/'))loads.push(Promise.all([read<{rows:Row[]}>('fleet/vehicles'),read<{rows:Row[]}>('fleet/equipment'),read<{rows:Row[]}>('fleet/drivers')]).then(([v,e,d])=>{if(active)setRefs({assets:[...v.rows,...e.rows],drivers:d.rows});}));
+  if(resource.path.startsWith('fleet/'))loads.push(Promise.all([read<{rows:Row[]}>('fleet/vehicles'),read<{rows:Row[]}>('fleet/equipment'),read<{rows:Row[]}>('fleet/drivers'),resource.path==='fleet/drivers'?read<{rows:Row[]}>('fleet/driver-accounts'):Promise.resolve({rows:[] as Row[]})]).then(([v,e,d,u])=>{if(active)setRefs({assets:[...v.rows,...e.rows],drivers:d.rows,driverAccounts:u.rows});}));
   if(resource.path.startsWith('warehouse/'))loads.push(read<{rows:Row[]}>('warehouse/materials').then(m=>{if(active)setRefs({materials:m.rows});}));
   Promise.all(loads).catch(e=>{if(active)setError(errorMessage(e));});return()=>{active=false;};
  },[resource.path,revision]);
@@ -63,6 +63,7 @@ export function ResourcePage({resource,context,onChanged,scope}:{resource:Resour
  const visible=rows.filter(row=>(!status||String(row.status??row.role??row.is_active)===status)&&(!scope||resource.path.startsWith('admin/')||row.project_id===scope||row.warehouse_id===scope||row.destination_id===scope||!('project_id'in row)&&!('warehouse_id'in row))&&JSON.stringify(row).toLowerCase().includes(search.toLowerCase()));
  const statuses=Array.from(new Set(rows.map(r=>r.status??r.role??r.is_active).filter(v=>v!==undefined))).map(String);
  const canAction=(row:Row,name:string)=>{
+  if(name==='approve'||name==='reject')return row.status==='PENDING';
   if(name==='receive')return row.status==='IN_TRANSIT';
   if(name==='complete')return row.status==='SCHEDULED';
   if(name==='cancel')return ['PENDING','SCHEDULED'].includes(String(row.status));
@@ -87,7 +88,7 @@ export function ResourcePage({resource,context,onChanged,scope}:{resource:Resour
   {action&&<Modal title={label(action.name)+' · '+String(action.row.reference??action.row.full_name??'Confirm operation')} onClose={()=>{if(!busy){setAction(null);setValues({});setError('');}}}><form onSubmit={e=>{e.preventDefault();void runAction();}}>
    {action.name==='access'?<div className="access-grid">{(['projects','sites','warehouses'] as const).map(key=><fieldset key={key}><legend>{label(key)}</legend>{context[key].map(row=><label className="manage-checkbox" key={row.id}><input type="checkbox" checked={((values[key==='projects'?'project_ids':key==='sites'?'site_ids':'warehouse_ids']??[])as string[]).includes(row.id)} onChange={e=>{const field=key==='projects'?'project_ids':key==='sites'?'site_ids':'warehouse_ids';setValues(v=>({...v,[field]:e.target.checked?[...(v[field]as string[]??[]),row.id]:(v[field]as string[]).filter(id=>id!==row.id)}));}}/>{String(row.name)}</label>)}</fieldset>)}</div>
    :action.name==='password'?<FieldInput field={{key:'password',label:'New password',type:'password'}} value={values.password} values={values} refs={{}} onChange={password=>setValues({password})}/>
-   :<p className="manage-help">Confirm {action.name} for reference <strong>{String(action.row.reference??action.row.id)}</strong>. This will update the database and record an audit event.</p>}
+   :<p className="manage-help">Confirm {action.name} for reference <strong>{String(action.row.reference??action.row.email??action.row.id)}</strong>. This will update the database and record an audit event.</p>}
    {error&&<p className="manage-error" role="alert">{error}</p>}<div className="dialog-footer"><button type="button" className="button button-outline" disabled={busy} onClick={()=>setAction(null)}>Cancel</button><button className="button button-primary" disabled={busy}>{busy?'Processing...':'Confirm '+action.name}</button></div>
   </form></Modal>}
   {details&&<Modal title="Record details and history" onClose={()=>setDetails(null)}>{!details.length?<p>No history recorded yet.</p>:details.map((row,i)=><dl className="detail-grid" key={i}>{Object.entries(row).map(([key,value])=><div key={key}><dt>{label(key)}</dt><dd>{show(value)}</dd></div>)}</dl>)}</Modal>}

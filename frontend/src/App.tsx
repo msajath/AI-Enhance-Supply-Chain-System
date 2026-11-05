@@ -24,7 +24,7 @@ function greeting(date = new Date()) {
 const today = () => new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
 const ICONS: Record<string, IconName> = {
-  dashboard: 'grid', users: 'users', roles: 'check', projects: 'building', sites: 'pin', warehouses: 'package', audit: 'clock', settings: 'settings',
+  dashboard: 'grid', users: 'users', requests: 'bell', roles: 'check', projects: 'building', sites: 'pin', warehouses: 'package', audit: 'clock', settings: 'settings',
   vehicles: 'truck', drivers: 'users', assignments: 'route', equipment: 'package', maintenance: 'settings', fuel: 'chart', reports: 'chart',
   inventory: 'box', materials: 'package', receipts: 'truck', issues: 'arrow', transfers: 'route', counts: 'check', adjustments: 'filter', returns: 'more', movements: 'clock',
 };
@@ -43,6 +43,7 @@ const INTRO: Record<string, string> = {
   admin: 'This is what is happening across your organization today.',
   fleet: 'Your vehicles, drivers and service work at a glance.',
   warehouse: 'This is what is moving through your warehouses today.',
+  driver: 'Here are the trips your fleet manager has assigned to you.',
 };
 
 function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
@@ -61,7 +62,7 @@ function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
       <div className="hero-copy">
         <p className="hero-date">{today()}</p>
         <h1>{greeting()}, {user.full_name.split(' ')[0]}</h1>
-        <p>{INTRO[prefix]} Figures reflect only the projects and warehouses you can access.</p>
+        <p>{INTRO[prefix]}{prefix !== 'driver' && ' Figures reflect only the projects and warehouses you can access.'}</p>
         <div className="hero-actions">
           {firstTask && <Link className="button button-primary" to={firstTask.path}><Icon name={iconFor(firstTask.path)} size={17}/>{firstTask.label}</Link>}
           <button type="button" className="button button-ghost" onClick={() => setRevision((v) => v + 1)}>Refresh</button>
@@ -74,8 +75,8 @@ function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
         {data.cards.map((card) => <div className="figure" key={card.label}><span className="figure-title">{card.label}</span><strong className="figure-value">{String(card.value)}</strong><span className="figure-note">Live from the database</span></div>)}
       </section>}
       <section className="overview-grid">
-        <div className="panel"><div className="panel-heading"><div><h2>Recent activity</h2><p>The latest changes in your workspace</p></div></div><DataTable rows={data.activity} columns={columns(data.activity)}/></div>
-        <div className="panel"><div className="panel-heading"><div><h2>{prefix === 'admin' ? 'Team by role' : 'Needs attention'}</h2><p>{prefix === 'fleet' ? 'Upcoming service and restricted assets' : prefix === 'warehouse' ? 'Quarantined stock' : 'Active accounts per role'}</p></div></div><DataTable rows={data.alerts} columns={columns(data.alerts)}/></div>
+        <div className="panel"><div className="panel-heading"><div><h2>{prefix === 'driver' ? 'Upcoming trips' : 'Recent activity'}</h2><p>{prefix === 'driver' ? 'Your next scheduled trips' : 'The latest changes in your workspace'}</p></div></div><DataTable rows={data.activity} columns={columns(data.activity)}/></div>
+        <div className="panel"><div className="panel-heading"><div><h2>{prefix === 'admin' ? 'Team by role' : prefix === 'driver' ? 'Notices' : 'Needs attention'}</h2><p>{prefix === 'fleet' ? 'Upcoming service and restricted assets' : prefix === 'warehouse' ? 'Quarantined stock' : prefix === 'driver' ? 'Licence and account reminders' : 'Active accounts per role'}</p></div></div><DataTable rows={data.alerts} columns={columns(data.alerts)}/></div>
       </section>
       <section className="panel quick-links"><div className="panel-heading"><div><h2>Continue your work</h2></div></div>
         <div className="quick-links-row">{navFor(prefix).slice(1, 6).map((item) => <Link className="button button-outline" key={item.path} to={item.path}><Icon name={iconFor(item.path)} size={16}/>{item.label}</Link>)}</div>
@@ -153,9 +154,9 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
         <button className="mobile-menu icon-button" aria-label="Open menu" onClick={() => setMenu(true)}><Icon name="menu"/></button>
         <span className="topbar-crumbs"><span>{user.role}</span><strong>{item?.label ?? 'Page'}</strong></span>
         <div className="top-actions">
-          <label className="filter-select scope-select"><Icon name="filter" size={15}/><span className="visually-hidden">{prefix === 'warehouse' ? 'Warehouse' : 'Project'}</span>
+          {prefix !== 'driver' && <label className="filter-select scope-select"><Icon name="filter" size={15}/><span className="visually-hidden">{prefix === 'warehouse' ? 'Warehouse' : 'Project'}</span>
             <select aria-label="Project or warehouse filter" value={scope} onChange={(e) => setScope(e.target.value)}><option value="">All my {prefix === 'warehouse' ? 'warehouses' : 'projects'}</option>{scopes.map((s) => <option key={s.id} value={s.id}>{String(s.name)}</option>)}</select>
-          </label>
+          </label>}
           <span className="role-badge">{user.role}</span>
           <button className="icon-button theme-toggle" aria-label={themeLabel} title={themeLabel} onClick={toggleTheme}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={17}/></button>
         </div>
@@ -217,6 +218,7 @@ function Application() {
     <Route path="/admin/*" element={protectedRole('Admin')}/>
     <Route path="/fleet/*" element={protectedRole('Fleet manager')}/>
     <Route path="/warehouse/*" element={protectedRole('Warehouse manager')}/>
+    <Route path="/driver/*" element={protectedRole('Driver')}/>
     <Route path="*" element={<Navigate to={home} replace/>}/>
   </Routes>;
 }
