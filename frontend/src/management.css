@@ -146,24 +146,166 @@ a.button { text-decoration: none; }
 .request-back { margin-top: 28px; }
 .auth-lead strong { color: var(--graphite); }
 
-.role-picker { margin: 0; padding: 0; border: 0; min-width: 0; }
-.role-picker legend { padding: 0; margin-bottom: 6px; }
-.role-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.role-option {
-  position: relative; display: grid; align-content: start; gap: 4px; min-width: 0; padding: 9px 10px;
-  border: 1px solid var(--rule); border-radius: var(--r-control); background: var(--paper); cursor: pointer;
-  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+/* ---------- Role Selection Bar & Dropdown ---------- */
+.role-select-field {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
 }
-.role-option input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
-.role-option svg { flex: none; color: var(--steel); transition: color 150ms ease; }
-.role-option span { display: grid; min-width: 0; line-height: 1.25; }
-.role-option strong { font-size: 13px; font-weight: 600; line-height: 1.2; }
-.role-option small { font-size: 11.5px; color: var(--steel); }
-.role-option:hover { border-color: var(--steel-light); }
-.role-option.selected { border-color: var(--graphite); background: var(--signal-soft); box-shadow: inset 0 0 0 1px var(--graphite); }
-.role-option.selected svg { color: var(--graphite); }
-.role-option:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
-.role-picker:disabled .role-option { opacity: 0.6; cursor: wait; }
+.role-select-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--graphite);
+}
+.role-select-wrapper {
+  position: relative;
+  width: 100%;
+}
+.role-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  background: var(--paper);
+  color: var(--graphite);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
+  box-sizing: border-box;
+}
+.role-select-bar:hover {
+  border-color: var(--steel-light);
+}
+.role-select-bar:focus,
+.role-select-bar.open {
+  border-color: var(--graphite);
+  box-shadow: 0 0 0 3px var(--rule-soft);
+  outline: none;
+}
+.role-select-current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.role-select-icon {
+  display: grid;
+  place-items: center;
+  color: var(--steel);
+}
+.role-select-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.role-select-text strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--graphite);
+  white-space: nowrap;
+}
+.role-select-text small {
+  font-size: 12px;
+  color: var(--steel);
+  white-space: nowrap;
+}
+.role-select-chevron {
+  display: grid;
+  place-items: center;
+  color: var(--steel);
+  transition: transform 200ms var(--ease);
+}
+.role-select-chevron.chevron-up {
+  transform: rotate(180deg);
+}
+
+.role-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 150ms var(--ease), transform 150ms var(--ease), visibility 150ms;
+}
+.role-select-dropdown.open {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  transform: translateY(0);
+}
+.theme-dark .role-select-dropdown {
+  background: #1e2429;
+  border-color: var(--rule);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.role-select-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--r-control);
+  cursor: pointer;
+  background: transparent;
+  transition: background-color 120ms ease;
+  position: relative;
+}
+.role-select-option:hover {
+  background: var(--rule-soft);
+}
+.role-select-option.selected {
+  background: var(--signal-soft);
+}
+.theme-dark .role-select-option.selected {
+  background: #3a3014;
+}
+.role-opt-icon {
+  display: grid;
+  place-items: center;
+  color: var(--steel);
+}
+.role-select-option.selected .role-opt-icon {
+  color: var(--graphite);
+}
+.role-opt-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.role-opt-info strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--graphite);
+}
+.role-opt-info small {
+  font-size: 12px;
+  color: var(--steel);
+}
+.role-opt-check {
+  display: grid;
+  place-items: center;
+  color: var(--signal-ink);
+  margin-left: auto;
+}
 
 @media (max-width: 900px) {
   /* phones and small tablets: drop the drawing on this page so the form fits on screen */

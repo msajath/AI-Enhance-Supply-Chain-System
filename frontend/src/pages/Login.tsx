@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { login, loginErrorMessage, requestAccess, requestErrorMessage, type AuthUser, type RequestedRole } from '../services/auth';
 import { Brand } from '../components/Brand';
 import Icon from '../components/Icon';
@@ -146,8 +146,22 @@ function RequestAccessPage({ theme, toggleTheme, onBack }: { theme: Theme; toggl
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const roleMenuRef = useRef<HTMLDivElement>(null);
   const submitting = useRef(false);
   const set = (key: RequestField) => (event: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: event.target.value }));
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(event.target as Node)) {
+        setRoleMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const selectedRole = ROLE_OPTIONS.find((o) => o.value === form.requestedRole) ?? ROLE_OPTIONS[0];
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -191,16 +205,70 @@ function RequestAccessPage({ theme, toggleTheme, onBack }: { theme: Theme; toggl
       {field('fullName', 'Full name', { autoComplete: 'name' })}
       {field('email', 'Work email', { type: 'email', autoComplete: 'email', placeholder: 'name@company.com' })}
       {field('organizationCode', 'Company code', { autoComplete: 'organization', placeholder: 'e.g. QOR-HQ-01' }, 'Ask your administrator. It is shown on their Settings page.', true)}
-      <fieldset className="field field-wide role-picker" disabled={loading}>
-        <legend>Role you need</legend>
-        <div className="role-options">
-          {ROLE_OPTIONS.map((o) => <label key={o.value} className={`role-option ${form.requestedRole === o.value ? 'selected' : ''}`}>
-            <input type="radio" name="requested-role" value={o.value} checked={form.requestedRole === o.value} onChange={() => setForm((f) => ({ ...f, requestedRole: o.value }))}/>
-            <Icon name={o.icon} size={17}/>
-            <span><strong>{o.label}</strong><small>{o.note}</small></span>
-          </label>)}
+      <div className="field field-wide role-select-field" ref={roleMenuRef}>
+        <label id="role-select-label" htmlFor="role-select-trigger">Role you need</label>
+        <div className="role-select-wrapper">
+          <button
+            id="role-select-trigger"
+            type="button"
+            className={`role-select-bar ${roleMenuOpen ? 'open' : ''}`}
+            onClick={() => setRoleMenuOpen((v) => !v)}
+            disabled={loading}
+            aria-haspopup="listbox"
+            aria-expanded={roleMenuOpen}
+            aria-label={`Role you need: ${selectedRole.label}. Click to select your role`}
+          >
+            <div className="role-select-current">
+              <span className="role-select-icon"><Icon name={selectedRole.icon} size={18}/></span>
+              <div className="role-select-text">
+                <strong>{selectedRole.label}</strong>
+                <small>— {selectedRole.note}</small>
+              </div>
+            </div>
+            <span className={`role-select-chevron ${roleMenuOpen ? 'chevron-up' : ''}`} aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </span>
+          </button>
+
+          <div
+            className={`role-select-dropdown ${roleMenuOpen ? 'open' : ''}`}
+            role="listbox"
+            aria-labelledby="role-select-label"
+          >
+            {ROLE_OPTIONS.map((o) => {
+              const isSelected = form.requestedRole === o.value;
+              return (
+                <label
+                  key={o.value}
+                  className={`role-select-option ${isSelected ? 'selected' : ''}`}
+                  onClick={() => {
+                    setForm((f) => ({ ...f, requestedRole: o.value }));
+                    setRoleMenuOpen(false);
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="requested-role"
+                    value={o.value}
+                    checked={isSelected}
+                    onChange={() => {
+                      setForm((f) => ({ ...f, requestedRole: o.value }));
+                      setRoleMenuOpen(false);
+                    }}
+                    className="visually-hidden"
+                  />
+                  <span className="role-opt-icon"><Icon name={o.icon} size={18}/></span>
+                  <div className="role-opt-info">
+                    <strong>{o.label}</strong>
+                    <small>{o.note}</small>
+                  </div>
+                  {isSelected && <span className="role-opt-check"><Icon name="check" size={16}/></span>}
+                </label>
+              );
+            })}
+          </div>
         </div>
-      </fieldset>
+      </div>
       {field('password', 'Password', { type: 'password', autoComplete: 'new-password' }, 'At least 12 characters.')}
       {field('confirm', 'Confirm password', { type: 'password', autoComplete: 'new-password' })}
       {error && <div className="form-error field-wide" role="alert">{error}</div>}
