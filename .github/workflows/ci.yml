@@ -68,8 +68,26 @@ jobs:
       - name: Execute Database Migrations
         run: npm run db:migrate
 
-      - name: Run Automated Tests
-        run: npm run test
+      - name: Seed Demo Data (repeatable)
+        run: npm run db:seed && npm run db:seed
+
+      - name: Verify Schema Constraints (002)
+        run: psql "postgresql://qorvenz_user:qorvenz_dev_secret_2026@localhost:5432/qorvenz_db" -v ON_ERROR_STOP=1 -f database/tests/002_core_org_structure.test.sql
+
+      - name: Run API Tests (incl. real-PostgreSQL scope tests)
+        env:
+          SCOPE_INTEGRATION: '1'
+        run: npm run test:ci --workspace=backend
+
+      - name: Run Web Tests
+        run: npm run test --workspace=frontend
+
+      - name: Upload Test Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-results
+          path: backend/test-results/
 
       - name: Build Web & API Artifacts
         run: npm run build
