@@ -1,0 +1,6 @@
+55721917a266c65e52a11a2e32ecc989  frontend/src/App.tsx
+e86f4776392021d971ee8b2a68270c96  frontend/src/App.test.tsx
+ceb4fd37e5cc90b7be61df1f57cf50c4  frontend/src/index.css
+41d343d282b2230d1c9b0b659bed15d9  frontend/src/components/SiteIllustration.tsx
+d6a3636b5b76283557fb7720c31ff969  frontend/src/pages/Projects.tsx
+10d8a9c1f514ea40d1fd2066d2c1b0b8  frontend/src/pages/Sites.tsx
