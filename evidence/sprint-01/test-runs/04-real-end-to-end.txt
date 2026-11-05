@@ -1,0 +1,32 @@
+# REAL end-to-end (no mocks) · 2026-11-05T16:02:03Z
+# API: apps/api/src/main.ts on :4000 with real express-session + connect-pg-simple. PostgreSQL 16 DB built from zero with
+#      npm run db:migrate && npm run db:seed (fixture-plan users; SEED_PASSWORD_* set for the test; plus the old shared-password
+#      admin@qorvenz.local account, which the seed disables). Web app on :5173 with /api proxied (like vite.config.ts).
+# Browser: Chromium via Playwright, logging in through the real sign-in form.
+
+PASS: wrong password rejected by the real API
+PASS: old shared demo password rejected by the real API
+PASS: storekeeper.mat sees only PRJ-MAT (real DB)
+PASS: storekeeper.mat does not see PRJ-GAL
+PASS: storekeeper.mat sees only SITE-MAT-01
+PASS: filter offers only PRJ-MAT
+PASS: cross-project API calls rejected with 403 (403/403/403)
+PASS: 403 responses leak no project data
+PASS: session survives page reload (PostgreSQL session store)
+PASS: warehouse.cen sees both granted projects
+PASS: scoped (not company-wide) label for warehouse manager
+PASS: Admin sees both projects, company-wide
+PASS: Admin "View sites" on PRJ-GAL → only SITE-GAL-01
+PASS: Admin "All projects" → both sites
+PASS: Driver has no Projects/Sites menu
+PASS: Driver GET /projects → 403
+PASS: Driver GET /sites → 403
+PASS: after sign-out the session no longer works (401)
+PASS: denials written to system_audit_logs (+5, expected 5)
+ROLE_NOT_PERMITTED DRIVER /api/v1/sites
+ROLE_NOT_PERMITTED DRIVER /api/v1/projects
+PROJECT_OUT_OF_SCOPE WAREHOUSE_MANAGER /api/v1/projects/e0000000-0000-0000-0000-000000000001/sites
+PROJECT_OUT_OF_SCOPE WAREHOUSE_MANAGER /api/v1/sites
+PROJECT_OUT_OF_SCOPE WAREHOUSE_MANAGER /api/v1/projects/e0000000-0000-0000-0000-000000000001
+
+ALL REAL END-TO-END CHECKS PASSED

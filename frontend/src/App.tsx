@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { login, signup, logout, restoreSession, loginErrorMessage, signupErrorMessage, AuthUser } from './services/auth';
+import { ProjectsPage } from './pages/Projects';
+import { SitesPage } from './pages/Sites';
 
 type Role = AuthUser['role'];
-type IconName = 'grid' | 'box' | 'truck' | 'users' | 'chart' | 'settings' | 'search' | 'bell' | 'arrow' | 'clock' | 'pin' | 'check' | 'plus' | 'filter' | 'more' | 'menu' | 'close' | 'logout' | 'package' | 'route' | 'sun' | 'moon';
+type IconName = 'grid' | 'box' | 'truck' | 'users' | 'chart' | 'settings' | 'search' | 'bell' | 'arrow' | 'clock' | 'pin' | 'check' | 'plus' | 'filter' | 'more' | 'menu' | 'close' | 'logout' | 'package' | 'route' | 'sun' | 'moon' | 'building';
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -17,13 +19,15 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     arrow: <><path d="M5 12h14M13 6l6 6-6 6"/></>, clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>, pin: <><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>,
     check: <><path d="m5 12 4 4L19 6"/></>, plus: <><path d="M12 5v14M5 12h14"/></>, filter: <><path d="M4 6h16M7 12h10m-7 6h4"/></>, more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>, menu: <><path d="M4 6h16M4 12h16M4 18h16"/></>, close: <><path d="m18 6-12 12M6 6l12 12"/></>, logout: <><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></>,
     package: <><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></>, route: <><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M8.5 16.5 15.5 7.5M10 6H7a3 3 0 0 0-3 3v3m10 6h3a3 3 0 0 0 3-3v-3"/></>,
-    sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>, moon: <><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/></>
+    sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>, moon: <><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/></>,
+    building: <><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M14 9h5a1 1 0 0 1 1 1v11M3 21h18"/><path d="M8 8h2M8 12h2M8 16h2M17 13h0M17 17h0"/></>
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
 const navItems: { label: string; icon: IconName }[] = [
-  { label: 'Overview', icon: 'grid' }, { label: 'Inventory', icon: 'box' },
+  { label: 'Overview', icon: 'grid' }, { label: 'Projects', icon: 'building' }, { label: 'Sites', icon: 'pin' },
+  { label: 'Inventory', icon: 'box' },
   { label: 'Deliveries', icon: 'truck' }, { label: 'Team', icon: 'users' },
   { label: 'Analytics', icon: 'chart' }, { label: 'Settings', icon: 'settings' }
 ];
@@ -54,6 +58,7 @@ function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('qorvenz-theme') === 'dark' ? 'dark' : 'light');
   const [email, setEmail] = useState('');
   const [activePage, setActivePage] = useState('Overview');
+  const [sitesProjectId, setSitesProjectId] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All status');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -65,7 +70,7 @@ function App() {
   const availableNavItems = role === 'Admin'
     ? navItems
     : role === 'Warehouse manager'
-      ? navItems.filter((item) => ['Overview', 'Inventory', 'Deliveries'].includes(item.label))
+      ? navItems.filter((item) => ['Overview', 'Projects', 'Sites', 'Inventory', 'Deliveries'].includes(item.label))
       : navItems.filter((item) => ['Overview', 'Deliveries'].includes(item.label));
   const visibleDeliveries = useMemo(() => deliveries.filter((item) => {
     const matches = `${item.id} ${item.destination} ${item.driver} ${item.items}`.toLowerCase().includes(query.toLowerCase());
@@ -101,7 +106,7 @@ function App() {
       <div className="brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div><button className="mobile-close icon-button" onClick={() => setMenuOpen(false)} aria-label="Close menu"><Icon name="close"/></button></div>
       <div className="org-switch"><div className="org-icon">Q</div><div className="org-copy"><strong>Qorvenz Construction</strong><small>Enterprise workspace</small></div><span className="chevron">⌄</span></div>
       <div className="nav-label">WORKSPACE</div>
-      <nav className="main-nav" aria-label="Main navigation">{availableNavItems.map((item) => <button key={item.label} className={`nav-item ${activePage === item.label ? 'selected' : ''}`} onClick={() => { setActivePage(item.label); setMenuOpen(false); }}><Icon name={item.icon}/><span>{item.label}</span>{item.label === 'Deliveries' && <span className="nav-count">8</span>}</button>)}</nav>
+      <nav className="main-nav" aria-label="Main navigation">{availableNavItems.map((item) => <button key={item.label} className={`nav-item ${activePage === item.label ? 'selected' : ''}`} onClick={() => { setActivePage(item.label); setSitesProjectId(''); setMenuOpen(false); }}><Icon name={item.icon}/><span>{item.label}</span>{item.label === 'Deliveries' && <span className="nav-count">8</span>}</button>)}</nav>
       <div className="sidebar-bottom"><div className="help-card"><div className="help-icon">✦</div><strong>Need a hand?</strong><p>Visit our help center for tips and support.</p><button onClick={() => announce('Help center is coming soon')}>Visit help center <Icon name="arrow" size={14}/></button></div><button className="profile" onClick={signOut} disabled={signingOut} title="Sign out"><div className="avatar profile-avatar">{profile.initials}</div><div className="profile-copy"><strong>{profile.name}</strong><small>{role} · Sign out</small></div><Icon name="logout"/></button></div>
     </aside>
     {menuOpen && <button className="scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)}/>}
@@ -123,7 +128,9 @@ function App() {
               <div className="table-footer"><span>Showing <strong>{visibleDeliveries.length}</strong> of <strong>24</strong> deliveries</span><div><button aria-label="Previous page" disabled>‹</button><button className="current-page">1</button><button onClick={() => announce('Page 2 of deliveries')}>2</button><button onClick={() => announce('Page 3 of deliveries')}>3</button><span>…</span><button onClick={() => announce('Last page of deliveries')}>8</button><button aria-label="Next page" onClick={() => announce('Next delivery page')}>›</button></div></div>
             </div><div className="right-column"><StockPanel isWarehouse={isWarehouse} announce={announce}/><ActivityPanel/></div></section>
           </>}
-        </> : <OtherPage page={activePage} role={role} query={query} setQuery={setQuery} announce={announce}/>}
+        </> : activePage === 'Projects' ? <ProjectsPage onViewSites={(projectId) => { setSitesProjectId(projectId); setActivePage('Sites'); }}/>
+        : activePage === 'Sites' ? <SitesPage key={sitesProjectId} initialProjectId={sitesProjectId}/>
+        : <OtherPage page={activePage} role={role} query={query} setQuery={setQuery} announce={announce}/>}
         <footer className="page-footer"><span>© 2026 Qorvenz Technologies</span><span><i className="online-dot"/> All systems operational <span className="footer-sep">·</span> v1.0.0</span></footer>
       </div>
     </main>
@@ -395,7 +402,7 @@ function SignupPage({ onSignIn, theme, toggleTheme, onBackToLogin }: { onSignIn:
 
 function Metric({ title, value, detail, note, icon, accent, chart }: { title: string; value: string; detail: string; note: string; icon: IconName; accent: string; chart: string }) {
   const lines: Record<string, string> = { inventory: '0,26 14,19 27,22 40,10 52,14 65,5 78,9 92,0', delivery: '0,21 14,25 27,13 40,18 52,8 65,14 78,4 92,8', suppliers: '0,18 14,22 27,13 40,17 52,7 65,12 78,1 92,5', ontime: '0,24 14,17 27,19 40,12 52,15 65,5 78,10 92,0' };
-  return <article className="metric-card"><div className="metric-top"><span>{title}</span><span className={`metric-icon ${accent}`}><Icon name={icon} size={17}/></span></div><div className="metric-value">{value}</div><div className="metric-bottom"><div><span className={`metric-change ${detail.startsWith('−') ? 'negative' : ''}`}>{detail}</span><span className="metric-note"> {note}</span></div><svg className="sparkline" viewBox="0 0 92 30" preserveAspectRatio="none"><polyline points={lines[chart]} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div></article>;
+  return <article className="metric-card"><div className="metric-top"><span>{title}</span><span className={`metric-icon ${accent}`}><Icon name={icon} size={17}/></span></div><div className="metric-value">{value}</div><div className="metric-bottom"><div><span className={`metric-change ${detail.startsWith('−') ? 'negative' : /urgent/i.test(detail) ? 'warning' : ''}`}>{detail}</span><span className="metric-note"> {note}</span></div><svg className="sparkline" viewBox="0 0 92 30" preserveAspectRatio="none"><polyline points={lines[chart]} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div></article>;
 }
 
 function StockPanel({ isWarehouse, announce }: { isWarehouse: boolean; announce: (message: string) => void }) {

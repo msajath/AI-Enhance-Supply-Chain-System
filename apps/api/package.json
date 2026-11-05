@@ -11,10 +11,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=./test-results/junit.xml",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx ../../scripts/migrate.ts",
-    "db:seed": "tsx ../../scripts/seed.ts"
+    "db:seed": "tsx ../../scripts/seed.ts",
+    "db:rollback": "tsx ../../scripts/rollback.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

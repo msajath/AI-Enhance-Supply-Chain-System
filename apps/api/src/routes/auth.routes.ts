@@ -1,19 +1,15 @@
 import { Router } from 'express';
-import session from 'express-session';
-import connectPgSimple from 'connect-pg-simple';
+import type session from 'express-session';
 import { compare, hashSync } from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
 import { pool } from '../config/database';
+import { createDefaultSessionStore, createSessionMiddleware, SESSION_COOKIE_NAME as cookieName, sessionCookie as cookie } from '../middleware/session';
 import { env } from '../config/env';
 import { ApiResponse } from '../utils/apiResponse';
 
-declare module 'express-session' { interface SessionData { userId?: string } }
-const cookieName = 'qorvenz.sid';
-const cookie = { httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/', maxAge: 8 * 60 * 60 * 1000 };
-const devSecret = randomBytes(32).toString('hex');
 const dummyHash = hashSync(randomBytes(32).toString('hex'), 12);
 const roleNames: Record<string, string> = { ADMIN: 'Admin', WAREHOUSE_MANAGER: 'Warehouse manager', DRIVER: 'Driver' };
 const credentialsSchema = z.object({ email: z.string().trim().email().max(255), password: z.string().min(1).max(72).refine(value => Buffer.byteLength(value, 'utf8') <= 72) }).strict();
@@ -54,11 +50,9 @@ async function authenticatedUser(req: import('express').Request) {
 
 export function createAuthRouter(store?: session.Store) {
   const router = Router();
-  const secret = process.env.SESSION_SECRET || (env.NODE_ENV === 'production' ? '' : devSecret);
-  if (secret.length < 32) throw new Error('SESSION_SECRET must contain at least 32 characters');
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   // PostgreSQL sessions survive API restarts; tests may inject an isolated store.
-  router.use(session({ name: cookieName, secret, store: store ?? new (connectPgSimple(session))({ pool, createTableIfMissing: true }), resave: false, saveUninitialized: false, cookie }));
+  router.use(createSessionMiddleware(store ?? createDefaultSessionStore()));
   router.use((req, res, next) => {
     if (req.method === 'POST') {
       const origin = req.get('Origin');
