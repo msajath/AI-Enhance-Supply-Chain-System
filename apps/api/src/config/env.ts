@@ -22,8 +22,10 @@ const envSchema = z.object({
     .string()
     .default('false')
     .transform((val) => val === 'true'),
-  JWT_SECRET: z.string().default('qorvenz_super_secret_jwt_key_sprint1_minimum_32_characters_long'),
-  JWT_EXPIRES_IN: z.string().default('7d'),
+  JWT_SECRET: z.string().min(32).default('qorvenz_super_secret_jwt_key_sprint1_minimum_32_characters_long'),
+  JWT_EXPIRES_IN: z.string().default('15m'),
+  JWT_ISSUER: z.string().default('qorvenz-api'),
+  JWT_AUDIENCE: z.string().default('qorvenz-web'),
 });
 
 const parsed = envSchema.safeParse(process.env);

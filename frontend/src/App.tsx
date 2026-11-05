@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 <<<<<<< Updated upstream
 type Role = 'Admin' | 'Warehouse manager' | 'Driver';
@@ -45,9 +45,17 @@ const stock = [
 ];
 
 function App() {
-  const [role, setRole] = useState<Role>('Admin');
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [restoring, setRestoring] = useState(true);
+  const [sessionError, setSessionError] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
+  useEffect(() => {
+    let active = true;
+    restoreSession().then(user => { if (active) setUser(user); }).catch(() => { if (active) setSessionError('Unable to restore your session. Please sign in again.'); }).finally(() => { if (active) setRestoring(false); });
+    return () => { active = false; };
+  }, []);
+  const role = user?.role ?? 'Driver';
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('qorvenz-theme') === 'dark' ? 'dark' : 'light');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [email, setEmail] = useState('');
   const [activePage, setActivePage] = useState('Overview');
   const [query, setQuery] = useState('');
@@ -57,12 +65,7 @@ function App() {
   const [completed, setCompleted] = useState(false);
   const isDriver = role === 'Driver';
   const isWarehouse = role === 'Warehouse manager';
-  const roleProfile: Record<Role, { name: string; initials: string }> = {
-    Admin: { name: 'Jordan Miller', initials: 'JM' },
-    'Warehouse manager': { name: 'Priya Shah', initials: 'PS' },
-    Driver: { name: 'Marcus Chen', initials: 'MC' },
-  };
-  const profile = roleProfile[role];
+  const profile = { name: user?.full_name ?? '', initials: (user?.full_name ?? '').split(' ').map(part => part[0]).join('').slice(0, 2) };
   const availableNavItems = role === 'Admin'
     ? navItems
     : role === 'Warehouse manager'
@@ -74,11 +77,12 @@ function App() {
   }), [query, filter]);
   const announce = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(''), 2800); };
 
-  const signIn = (selectedRole: Role) => {
-    setRole(selectedRole);
+  const signIn = (authenticatedUser: AuthUser) => {
+    setSessionError('');
+    setUser(authenticatedUser);
     setActivePage('Overview');
     setQuery('');
-    setIsAuthenticated(true);
+
   };
   const toggleTheme = () => setTheme((current) => {
     const next = current === 'light' ? 'dark' : 'light';
@@ -86,7 +90,15 @@ function App() {
     return next;
   });
 
-  if (!isAuthenticated) return <LoginPage onSignIn={signIn} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>;
+  const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try { await logout(); setUser(null); setEmail(''); setMenuOpen(false); setCompleted(false); }
+    catch { announce('Unable to sign out. Please try again.'); }
+    finally { setSigningOut(false); }
+  };
+  if (restoring) return <main className={`login-page ${theme === 'dark' ? 'theme-dark' : ''}`}><p role="status">Restoring your session...</p></main>;
+  if (!user) return <LoginPage onSignIn={signIn} sessionError={sessionError} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>;
 
   return <div className={`app-shell ${theme === 'dark' ? 'theme-dark' : ''}`}>
     <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
@@ -94,7 +106,7 @@ function App() {
       <div className="org-switch"><div className="org-icon">Q</div><div className="org-copy"><strong>Qorvenz Construction</strong><small>Enterprise workspace</small></div><span className="chevron">⌄</span></div>
       <div className="nav-label">WORKSPACE</div>
       <nav className="main-nav" aria-label="Main navigation">{availableNavItems.map((item) => <button key={item.label} className={`nav-item ${activePage === item.label ? 'selected' : ''}`} onClick={() => { setActivePage(item.label); setMenuOpen(false); }}><Icon name={item.icon}/><span>{item.label}</span>{item.label === 'Deliveries' && <span className="nav-count">8</span>}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="help-card"><div className="help-icon">✦</div><strong>Need a hand?</strong><p>Visit our help center for tips and support.</p><button onClick={() => announce('Help center is coming soon')}>Visit help center <Icon name="arrow" size={14}/></button></div><button className="profile" onClick={() => setIsAuthenticated(false)} title="Sign out"><div className="avatar profile-avatar">{profile.initials}</div><div className="profile-copy"><strong>{profile.name}</strong><small>{role} · Sign out</small></div><Icon name="logout"/></button></div>
+      <div className="sidebar-bottom"><div className="help-card"><div className="help-icon">✦</div><strong>Need a hand?</strong><p>Visit our help center for tips and support.</p><button onClick={() => announce('Help center is coming soon')}>Visit help center <Icon name="arrow" size={14}/></button></div><button className="profile" onClick={signOut} disabled={signingOut} title="Sign out"><div className="avatar profile-avatar">{profile.initials}</div><div className="profile-copy"><strong>{profile.name}</strong><small>{role} · Sign out</small></div><Icon name="logout"/></button></div>
     </aside>
     {menuOpen && <button className="scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)}/>}
     <main className="main-content">
@@ -192,12 +204,19 @@ function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme
     setEmail(demoAccount.email);
     setPassword(demoAccount.password);
     setLoginError('');
+    if (errors.email || errors.password) {
+      document.getElementById(errors.email ? 'login-email' : 'login-password')?.focus();
+      return;
+    }
+    submitting.current = true;
+    setLoading(true);
+    const credentials = { email: email.trim(), password };
+    setPassword('');
+    try { onSignIn(await login(credentials)); }
+    catch (error) { setLoginError(loginErrorMessage(error)); }
+    finally { submitting.current = false; setLoading(false); }
   };
-  const roles: { name: Role; icon: IconName; caption: string }[] = [
-    { name: 'Admin', icon: 'grid', caption: 'Manage the whole operation' },
-    { name: 'Warehouse manager', icon: 'box', caption: 'Inventory and fulfillment' },
-    { name: 'Driver', icon: 'truck', caption: 'Routes and deliveries' },
-  ];
+  if (signupMode) return <SignupPage onSignIn={onSignIn} theme={theme} toggleTheme={toggleTheme} onBackToLogin={() => setSignupMode(false)}/>;
   return <main className={`login-page ${theme === 'dark' ? 'theme-dark' : ''}`}>
     <section className="login-story">
       <div className="login-brand"><div className="brand-mark">q<span>.</span></div><div className="brand-copy"><strong>qorvenz</strong><small>SUPPLY CHAIN</small></div></div>
