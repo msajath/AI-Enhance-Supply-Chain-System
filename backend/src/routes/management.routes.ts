@@ -12,7 +12,7 @@ import { safe,fail,audit,orgParams,projectScope,warehouseScope,text } from '../m
 import { PERMISSIONS } from '../auth/permissions';
 export function createManagementRouter(sessionMiddleware:RequestHandler) {
  const r=Router();
- r.use(['/admin','/fleet','/warehouse','/context','/account'],sessionMiddleware,requireAuth,(_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
+ r.use(['/admin','/fleet','/warehouse','/driver','/context','/account'],sessionMiddleware,requireAuth,(_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
  r.use((req,res,next)=>{
   if(!['GET','HEAD','OPTIONS'].includes(req.method)) {
    const origin=req.get('Origin');
@@ -55,6 +55,26 @@ export function createManagementRouter(sessionMiddleware:RequestHandler) {
    alerts=stock.filter(b=>Number(b.quarantined)>0).map(b=>({id:b.warehouse_id+'-'+b.material_id,warehouse_id:b.warehouse_id,material_id:b.material_id,quarantined:b.quarantined}));
   }
   res.json(ApiResponse.success({cards,activity,alerts}));
+ }));
+ // Driver portal: only the assignments of the fleet driver record linked to this login.
+ const driverAssignments=`SELECT a.id,v.vehicle_number,v.model,p.name project_name,s.name site_name,a.starts_at,a.ends_at,a.load_quantity,v.capacity_unit,a.status
+   FROM vehicle_assignments a JOIN fleet_drivers d ON d.id=a.driver_id JOIN fleet_vehicles v ON v.id=a.vehicle_id JOIN projects p ON p.id=a.project_id LEFT JOIN sites s ON s.id=a.site_id
+   WHERE d.user_id=$1 AND a.organization_id=$2`;
+ const driverOnly:RequestHandler=(req,res,next)=>{if(req.auth?.role!=='DRIVER'){res.status(403).json(ApiResponse.error('Driver access only.','FORBIDDEN'));return;}next();};
+ r.get('/driver/assignments',driverOnly,safe(async(req,res)=>{
+  const a=req.auth!;res.json(ApiResponse.success({rows:(await pool.query(driverAssignments+' ORDER BY a.starts_at DESC LIMIT 500',[a.userId,a.organizationId])).rows}));
+ }));
+ r.get('/driver/dashboard',driverOnly,safe(async(req,res)=>{
+  const a=req.auth!;
+  const driver=(await pool.query('SELECT name,license_number,license_expiry,status FROM fleet_drivers WHERE user_id=$1 AND organization_id=$2',[a.userId,a.organizationId])).rows[0];
+  const rows=(await pool.query(driverAssignments+' ORDER BY a.starts_at',[a.userId,a.organizationId])).rows;
+  const now=Date.now(),day=new Date().toDateString();
+  const upcoming=rows.filter(r=>r.status==='SCHEDULED'&&new Date(r.ends_at).getTime()>=now);
+  const cards=[{label:"Today's trips",value:upcoming.filter(r=>new Date(r.starts_at).toDateString()===day).length},{label:'Upcoming trips',value:upcoming.length},{label:'Completed trips',value:rows.filter(r=>r.status==='COMPLETED').length},{label:'Licence expiry',value:driver?String(driver.license_expiry instanceof Date?driver.license_expiry.toISOString().slice(0,10):driver.license_expiry):'Not linked'}];
+  const alerts:unknown[]=[];
+  if(!driver) alerts.push({id:'link',notice:'Your login is not linked to a driver record yet. Ask your fleet manager to link it under Fleet > Drivers.'});
+  else if(new Date(driver.license_expiry).getTime()-now<30*864e5) alerts.push({id:'licence',notice:'Your driving licence expires within 30 days. Renew it and tell your fleet manager.'});
+  res.json(ApiResponse.success({cards,activity:upcoming.slice(0,8),alerts}));
  }));
  r.use('/admin',createAdminRouter());r.use('/fleet',createFleetRouter());r.use('/warehouse',createWarehouseRouter());
  return r;

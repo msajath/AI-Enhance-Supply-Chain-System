@@ -124,3 +124,57 @@ describe('session lifecycle', () => {
     expect(screen.getByRole('heading', { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
   });
 });
+
+describe('request an account', () => {
+  async function openRequest() {
+    await renderLogin();
+    await userEvent.click(screen.getByRole('button', { name: 'Request an account' }));
+    await screen.findByRole('heading', { name: 'Request an account' });
+  }
+  it('offers warehouse manager, fleet manager and driver, never Admin', async () => {
+    await openRequest();
+    const roles = screen.getAllByRole('radio').map(r => (r as HTMLInputElement).value);
+    expect(roles).toEqual(['WAREHOUSE_MANAGER', 'FLEET_MANAGER', 'DRIVER']);
+    expect(screen.queryByText(/^Admin/)).not.toBeInTheDocument();
+  });
+  it('validates before sending anything', async () => {
+    await openRequest();
+    const keyboard = userEvent.setup();
+    await keyboard.type(screen.getByLabelText('Full name'), 'New Person');
+    await keyboard.type(screen.getByLabelText('Work email'), 'new@example.com');
+    await keyboard.type(screen.getByLabelText('Company code'), 'QOR-HQ-01');
+    await keyboard.type(screen.getByLabelText('Password'), 'long-enough-password');
+    await keyboard.type(screen.getByLabelText('Confirm password'), 'different-password');
+    fireEvent.submit(screen.getByRole('button', { name: 'Send request' }).closest('form')!);
+    expect(screen.getByText('Passwords do not match.')).toBeVisible();
+    expect(post).not.toHaveBeenCalled();
+  });
+  it('sends the request and explains that an administrator must approve it', async () => {
+    post.mockResolvedValue({ data: { success: true } });
+    await openRequest();
+    const keyboard = userEvent.setup();
+    await keyboard.type(screen.getByLabelText('Full name'), 'New Person');
+    await keyboard.type(screen.getByLabelText('Work email'), 'new@example.com');
+    await keyboard.type(screen.getByLabelText('Company code'), 'QOR-HQ-01');
+    await keyboard.click(screen.getByRole('radio', { name: /Driver/ }));
+    await keyboard.type(screen.getByLabelText('Password'), 'long-enough-password');
+    await keyboard.type(screen.getByLabelText('Confirm password'), 'long-enough-password');
+    fireEvent.submit(screen.getByRole('button', { name: 'Send request' }).closest('form')!);
+    await screen.findByRole('heading', { name: 'Request sent' });
+    expect(post).toHaveBeenCalledWith('/api/v1/auth/access-requests', { fullName: 'New Person', email: 'new@example.com', organizationCode: 'QOR-HQ-01', requestedRole: 'DRIVER', password: 'long-enough-password' }, { withCredentials: true });
+    await userEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
+    await screen.findByRole('heading', { name: 'Sign in to your workspace' });
+  });
+  it('shows a safe message when sending fails', async () => {
+    post.mockRejectedValue(failure(429));
+    await openRequest();
+    const keyboard = userEvent.setup();
+    await keyboard.type(screen.getByLabelText('Full name'), 'New Person');
+    await keyboard.type(screen.getByLabelText('Work email'), 'new@example.com');
+    await keyboard.type(screen.getByLabelText('Company code'), 'QOR-HQ-01');
+    await keyboard.type(screen.getByLabelText('Password'), 'long-enough-password');
+    await keyboard.type(screen.getByLabelText('Confirm password'), 'long-enough-password');
+    fireEvent.submit(screen.getByRole('button', { name: 'Send request' }).closest('form')!);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many requests');
+  });
+});

@@ -74,6 +74,34 @@ export function createAdminRouter() {
    await audit(c,a,'ACCESS_ASSIGNED',{user_id:id,...v});
   });res.json(ApiResponse.success(null));
  }));
+ // Requests sent from the public "Request an account" form (auth.routes.ts).
+ r.get('/access-requests',safe(async(req,res)=>{
+  const rows=await pool.query(`SELECT r.id,r.full_name,r.email,r.requested_role,r.status,r.created_at,r.reviewed_at,u.full_name reviewed_by
+    FROM access_requests r LEFT JOIN users u ON u.id=r.reviewed_by WHERE r.organization_id=$1
+    ORDER BY (r.status='PENDING') DESC, r.created_at DESC LIMIT 500`,[req.auth!.organizationId]);
+  res.json(ApiResponse.success({rows:rows.rows}));
+ }));
+ r.post('/access-requests/:id/approve',permit('users.create'),safe(async(req,res)=>{
+  const id=uuid.parse(req.params.id),a=req.auth!;
+  const row=await withTransaction(async c=>{
+   const request=(await c.query(`SELECT * FROM access_requests WHERE id=$1 AND organization_id=$2 FOR UPDATE`,[id,a.organizationId])).rows[0];
+   if(!request) fail('Request not found.',404);
+   if(request.status!=='PENDING') fail('This request has already been reviewed.');
+   if((await c.query('SELECT 1 FROM users WHERE lower(email)=$1',[request.email])).rowCount) fail('An account with this email already exists.');
+   const u=await insert(c,'users',{organization_id:a.organizationId,email:request.email,full_name:request.full_name,role:request.requested_role,is_active:true,password_hash:request.password_hash});
+   await c.query(`UPDATE access_requests SET status='APPROVED',reviewed_by=$2,reviewed_at=now(),user_id=$3 WHERE id=$1`,[id,a.userId,u.id]);
+   await audit(c,a,'ACCESS_REQUEST_APPROVED',{request_id:id,user_id:u.id,role:u.role});
+   delete u.password_hash; return u;
+  });res.json(ApiResponse.success({row},'Account created. Assign projects and warehouses under Users > Access.'));
+ }));
+ r.post('/access-requests/:id/reject',permit('users.update'),safe(async(req,res)=>{
+  const id=uuid.parse(req.params.id),a=req.auth!;
+  await withTransaction(async c=>{
+   const done=await c.query(`UPDATE access_requests SET status='REJECTED',reviewed_by=$3,reviewed_at=now() WHERE id=$1 AND organization_id=$2 AND status='PENDING' RETURNING id`,[id,a.organizationId,a.userId]);
+   if(!done.rowCount) fail('Request not found or already reviewed.',404);
+   await audit(c,a,'ACCESS_REQUEST_REJECTED',{request_id:id});
+  });res.json(ApiResponse.success(null));
+ }));
  for(const [route,d] of Object.entries(definitions)) {
   r.get('/'+route,safe(async(req,res)=>res.json(ApiResponse.success({rows:(await pool.query(`SELECT * FROM ${d.table} WHERE organization_id=$1 ORDER BY name`,[req.auth!.organizationId])).rows}))));
   for(const method of ['post','patch'] as const) r[method]('/'+route+(method==='patch'?'/:id':''),permit(d.permission),safe(async(req,res)=>{

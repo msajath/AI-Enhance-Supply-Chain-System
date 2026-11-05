@@ -35,7 +35,7 @@ describe.skipIf(!enabled)('three-role workflows against real PostgreSQL',()=>{
  });
  it('serves the three dashboards, scoped context, roles and settings',async()=>{
   for(const [agent,role]of [[admin,'admin'],[fleet,'fleet'],[wm,'warehouse']]as const){const d=await agent.get('/api/v1/'+role+'/dashboard');expect(d.status).toBe(200);expect(d.body.data.cards).toHaveLength(4);expect((await agent.get('/api/v1/context')).status).toBe(200);expect((await agent.get('/api/v1/auth/me')).status).toBe(200);}
-  const roles=await admin.get('/api/v1/admin/roles');expect(roles.body.data.rows).toHaveLength(3);
+  const roles=await admin.get('/api/v1/admin/roles');expect(roles.body.data.rows.map((r:{id:string})=>r.id)).toEqual(['ADMIN','FLEET_MANAGER','WAREHOUSE_MANAGER','DRIVER']);
   expect((await admin.get('/api/v1/admin/settings')).status).toBe(200);
  });
  it('denies other-role APIs, cookie tampering, expired tokens and public Admin signup',async()=>{

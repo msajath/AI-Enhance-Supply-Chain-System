@@ -6,7 +6,7 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name: string;
-  role: 'Admin' | 'Warehouse manager' | 'Fleet manager';
+  role: 'Admin' | 'Warehouse manager' | 'Fleet manager' | 'Driver';
 }
 
 export async function login(credentials: { email: string; password: string }): Promise<AuthUser> {
@@ -19,7 +19,7 @@ function parseUser(data: unknown): AuthUser {
   const user = response.data?.data?.user;
   if (response.data?.success !== true || !user || typeof user.id !== 'string' || !user.id ||
       typeof user.email !== 'string' || typeof user.full_name !== 'string' || !user.full_name.trim() ||
-      !['Admin', 'Warehouse manager', 'Fleet manager'].includes(user.role)) {
+      !['Admin', 'Warehouse manager', 'Fleet manager', 'Driver'].includes(user.role)) {
     throw new Error('INVALID_AUTH_RESPONSE');
   }
   return { id: user.id, email: user.email, full_name: user.full_name, role: user.role };
@@ -34,6 +34,22 @@ export function loginErrorMessage(error: unknown): string {
   if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') return 'Sign-in timed out. Please try again.';
   if (!error.response) return 'Unable to connect. Check your connection and try again.';
   return 'Sign-in service is unavailable. Please try again later.';
+}
+
+export type RequestedRole = 'WAREHOUSE_MANAGER' | 'FLEET_MANAGER' | 'DRIVER';
+
+/** Sends a request for a new account. An administrator must approve it before anyone can sign in. */
+export async function requestAccess(request: { fullName: string; email: string; organizationCode: string; requestedRole: RequestedRole; password: string }): Promise<void> {
+  await apiClient.post('/api/v1/auth/access-requests', request, { withCredentials: true });
+}
+
+export function requestErrorMessage(error: unknown): string {
+  if (!axios.isAxiosError(error)) return 'Unable to send your request. Please try again later.';
+  const status = error.response?.status;
+  if (status === 400 || status === 422) return 'Check your details. The password needs at least 12 characters.';
+  if (status === 429) return 'Too many requests. Please wait before trying again.';
+  if (!error.response) return 'Unable to connect. Check your connection and try again.';
+  return 'The request service is unavailable. Please try again later.';
 }
 
 export async function restoreSession(): Promise<AuthUser | null> {

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 // Small building blocks shared by the Projects and Sites pages (Jira AESCS-162 / 163).
 
 const STATUS_TONE: Record<string, string> = {
-  ACTIVE: 'green', PLANNED: 'blue', ON_HOLD: 'amber', COMPLETED: 'blue', CANCELLED: 'amber', INACTIVE: 'amber', CLOSED: 'blue',
+  ACTIVE: 'green', PLANNED: 'blue', ON_HOLD: 'amber', COMPLETED: 'blue', CANCELLED: 'amber', INACTIVE: 'amber', CLOSED: 'blue', PENDING: 'amber', APPROVED: 'green', REJECTED: 'amber',
 };
 
 export function StatusPill({ status }: { status: string }) {
