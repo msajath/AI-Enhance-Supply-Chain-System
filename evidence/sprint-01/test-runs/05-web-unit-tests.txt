@@ -1,0 +1,43 @@
+# Frontend unit tests (frontend/src/**/*.test.tsx) · 2026-11-05T15:57:21Z
+# Run under jsdom 25 with the team's installed @testing-library/react 16.3.3, user-event 14.6.8, jest-dom 7.0.1, React 18.3.1.
+# Runner: vitest-compatible sandbox runner (real vitest needs native rollup binaries not available here). CI runs: npm run test --workspace=frontend
+
+=== App.test.tsx ===
+▸ login
+  ✓ renders branding and accessible fields without demo credentials or role assignment
+  ✓ validates empty fields and focuses the email
+  ✓ validates email before calling the API
+  ✓ sends credentials and renders the existing dashboard with the server role and name
+  ✓ hides backend details for status 401
+  ✓ hides backend details for status 403
+  ✓ handles network failures
+  ✓ blocks duplicate submissions while loading
+  ✓ rejects malformed responses and unsupported roles
+  ✓ toggles password visibility and theme
+  ✓ maps HTTP 400 to a safe message
+  ✓ maps HTTP 422 to a safe message
+  ✓ maps HTTP 429 to a safe message
+  ✓ maps HTTP 500 to a safe message
+  ✓ maps HTTP 404 to a safe message
+  ✓ maps timeouts
+▸ session lifecycle
+  ✓ restores an authenticated user before rendering the dashboard
+  ✓ reports restoration failures without displaying protected content
+  ✓ invalidates the backend session before clearing authentication
+  ✓ keeps the session visible and reports failed logout
+Tests: 20 passed, 0 failed, 0 skipped
+
+=== ProjectsSites.test.tsx ===
+▸ ProjectsPage
+  ✓ shows a loading state, then the projects from the API
+  ✓ shows an empty state when the user has no projects
+  ✓ shows a safe error with a working retry
+  ✓ explains 403 and connection errors
+  ✓ filters locally and opens the sites of a project
+▸ SitesPage
+  ✓ lists all sites, then only the chosen project's sites
+  ✓ starts filtered when opened from a project
+  ✓ only offers projects the server returned in the filter
+  ✓ shows an access message when the server refuses the project
+  ✓ shows an empty state for a project without sites
+Tests: 10 passed, 0 failed, 0 skipped
