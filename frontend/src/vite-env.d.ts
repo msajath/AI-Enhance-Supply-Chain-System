@@ -7,3 +7,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Demo-login passwords injected by vite.config.ts in development; null in production builds. */
+declare const __DEMO_PASSWORDS__: { admin: string; fleet: string; warehouse: string; storekeeper: string } | null;

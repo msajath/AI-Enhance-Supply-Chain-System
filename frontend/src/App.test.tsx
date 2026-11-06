@@ -165,6 +165,19 @@ describe('request an account', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
     await screen.findByRole('heading', { name: 'Sign in to your workspace' });
   });
+  it('says clearly when the company code is wrong', async () => {
+    post.mockRejectedValue(Object.assign(failure(404), { response: { status: 404, data: { success: false, error: { code: 'COMPANY_NOT_FOUND' } } } }));
+    await openRequest();
+    const keyboard = userEvent.setup();
+    await keyboard.type(screen.getByLabelText('Full name'), 'New Person');
+    await keyboard.type(screen.getByLabelText('Work email'), 'new@example.com');
+    await keyboard.type(screen.getByLabelText('Company code'), 'WRONG');
+    await keyboard.type(screen.getByLabelText('Password'), 'long-enough-password');
+    await keyboard.type(screen.getByLabelText('Confirm password'), 'long-enough-password');
+    fireEvent.submit(screen.getByRole('button', { name: 'Send request' }).closest('form')!);
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not find that company code');
+    expect(screen.queryByRole('heading', { name: 'Request sent' })).not.toBeInTheDocument();
+  });
   it('shows a safe message when sending fails', async () => {
     post.mockRejectedValue(failure(429));
     await openRequest();

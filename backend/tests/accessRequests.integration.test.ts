@@ -29,7 +29,7 @@ describe.skipIf(!enabled)('access requests against real PostgreSQL', () => {
   it('saves a request that grants nothing until it is approved', async () => {
     const email = `new-${suffix}@example.com`;
     expect((await requestAccount(email)).status).toBe(202);
-    expect((await requestAccount(email)).status).toBe(202); // duplicate: still one pending row
+    expect((await requestAccount(email)).status).toBe(409); // duplicate: told it is waiting, still one row
     const rows = await pool.query('SELECT status FROM access_requests WHERE email=$1', [email]);
     expect(rows.rows).toEqual([{ status: 'PENDING' }]);
     expect((await request(app).post('/api/v1/auth/login').send({ email, password })).status).toBe(401);

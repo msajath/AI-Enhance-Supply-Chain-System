@@ -107,6 +107,18 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
     return () => { active = false; };
   }, [revision, user.id]);
   useEffect(() => { setMenu(false); }, [location.pathname]);
+  // Admins see how many access requests are waiting, refreshed every 30 s and on every page change.
+  const [pendingRequests, setPendingRequests] = useState(0);
+  useEffect(() => {
+    if (prefix !== 'admin') return;
+    let active = true;
+    const load = () => read<{ rows: Row[] }>('admin/access-requests')
+      .then((d) => { if (active) setPendingRequests(d.rows.filter((r) => r.status === 'PENDING').length); })
+      .catch(() => { /* the badge is optional; the page itself shows any error */ });
+    load();
+    const timer = window.setInterval(load, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [prefix, location.pathname, revision]);
   const initials = user.full_name.split(' ').map((p) => p[0]).join('').slice(0, 2);
   const signOut = async () => { if (busy) return; setBusy(true); setError(''); try { await onLogout(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); } };
   const scopes = prefix === 'warehouse' ? context.warehouses : context.projects;
@@ -138,7 +150,7 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
       <p className="org-name">{String(context.organization.name ?? 'Your organization')}<small>{user.role} workspace</small></p>
       <nav className="main-nav" aria-label="Main navigation">
         {activeIndex >= 0 && <span className="nav-indicator" aria-hidden="true" style={{ transform: `translateY(${activeIndex * 42}px)` }}/>}
-        {items.map((entry) => <NavLink key={entry.path} to={entry.path} className={({ isActive }: { isActive: boolean }) => 'nav-item ' + (isActive ? 'selected' : '')}><Icon name={iconFor(entry.path)}/><span>{entry.label}</span></NavLink>)}
+        {items.map((entry) => <NavLink key={entry.path} to={entry.path} className={({ isActive }: { isActive: boolean }) => 'nav-item ' + (isActive ? 'selected' : '')}><Icon name={iconFor(entry.path)}/><span>{entry.label}</span>{entry.path === '/admin/requests' && pendingRequests > 0 && <b className="nav-count" aria-label={`${pendingRequests} waiting`}>{pendingRequests}</b>}</NavLink>)}
       </nav>
       <div className="sidebar-foot">
         <button className="profile" title="Account settings" onClick={() => { setError(''); setProfile(true); }}>
