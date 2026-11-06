@@ -24,11 +24,15 @@ export function AuthLayout({ theme, toggleTheme, children, dense = false }: { th
   </main>;
 }
 
-const DEMO_ACCOUNTS = [
-  { role: 'Admin', email: 'admin@demo.qorvenz.test', password: 'Password123!', icon: 'settings' as const },
-  { role: 'Fleet Manager', email: 'fleet@demo.qorvenz.test', password: 'Password123!', icon: 'truck' as const },
-  { role: 'Warehouse Manager', email: 'warehouse.cen@demo.qorvenz.test', password: 'Password123!', icon: 'package' as const },
-] as const;
+// Quick demo logins (development only). Passwords come from SEED_PASSWORD_* in the root .env
+// via vite.config.ts, so they always match what `npm run db:seed` created.
+const DEMO_PASSWORDS = typeof __DEMO_PASSWORDS__ !== 'undefined' ? __DEMO_PASSWORDS__ : null;
+const DEMO_ACCOUNTS = DEMO_PASSWORDS ? [
+  { role: 'Admin', email: 'admin@demo.qorvenz.test', password: DEMO_PASSWORDS.admin, icon: 'settings' as const },
+  { role: 'Fleet Manager', email: 'fleet@demo.qorvenz.test', password: DEMO_PASSWORDS.fleet, icon: 'truck' as const },
+  { role: 'Warehouse Manager', email: 'warehouse.cen@demo.qorvenz.test', password: DEMO_PASSWORDS.warehouse, icon: 'package' as const },
+  { role: 'Matara Storekeeper', email: 'storekeeper.mat@demo.qorvenz.test', password: DEMO_PASSWORDS.storekeeper, icon: 'box' as const },
+] : [];
 
 export default function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme }: { onSignIn: (user: AuthUser) => void; sessionError: string; email: string; setEmail: (value: string) => void; theme: Theme; toggleTheme: () => void }) {
   const [password, setPassword] = useState('');
@@ -43,6 +47,8 @@ export default function LoginPage({ onSignIn, sessionError, email, setEmail, the
   const fillDemoAccount = (account: (typeof DEMO_ACCOUNTS)[number]) => {
     setEmail(account.email);
     setPassword(account.password);
+    // No password in .env for this account: let the person type it.
+    if (!account.password) window.setTimeout(() => document.getElementById('login-password')?.focus(), 0);
     setErrors({ email: '', password: '' });
     setLoginError('');
   };
@@ -73,10 +79,10 @@ export default function LoginPage({ onSignIn, sessionError, email, setEmail, the
   return <AuthLayout theme={theme} toggleTheme={toggleTheme}>
     <h1 className="auth-title">Sign in to your workspace</h1>
     <p className="auth-lead">Use your Qorvenz work account.</p>
-    <div className="demo-accounts-panel">
+    {DEMO_ACCOUNTS.length > 0 && <div className="demo-accounts-panel">
       <div className="demo-accounts-top">
         <span className="demo-badge">Quick Demo Access</span>
-        <span className="demo-password-note">Password: <code>Password123!</code></span>
+        <span className="demo-password-note">Click a role to fill in its login</span>
       </div>
       <div className="demo-accounts-list">
         {DEMO_ACCOUNTS.map((acc) => {
@@ -98,7 +104,7 @@ export default function LoginPage({ onSignIn, sessionError, email, setEmail, the
           );
         })}
       </div>
-    </div>
+    </div>}
     {sessionError && <p className="form-error" role="status">{sessionError}</p>}
     <form className="auth-form" noValidate onSubmit={submit} aria-busy={loading}>
       <div className="field">

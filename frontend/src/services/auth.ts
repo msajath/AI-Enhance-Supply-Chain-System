@@ -46,6 +46,11 @@ export async function requestAccess(request: { fullName: string; email: string; 
 export function requestErrorMessage(error: unknown): string {
   if (!axios.isAxiosError(error)) return 'Unable to send your request. Please try again later.';
   const status = error.response?.status;
+  const code = (error.response?.data as { error?: { code?: string }; code?: string } | undefined);
+  const errorCode = code?.error?.code ?? code?.code;
+  if (errorCode === 'COMPANY_NOT_FOUND') return 'We could not find that company code. Check it with your administrator.';
+  if (errorCode === 'ACCOUNT_EXISTS') return 'An account with this email already exists. Sign in instead, or ask your administrator to reset the password.';
+  if (errorCode === 'REQUEST_PENDING') return 'You already have a request waiting for approval. Your administrator will review it.';
   if (status === 400 || status === 422) return 'Check your details. The password needs at least 12 characters.';
   if (status === 429) return 'Too many requests. Please wait before trying again.';
   if (!error.response) return 'Unable to connect. Check your connection and try again.';

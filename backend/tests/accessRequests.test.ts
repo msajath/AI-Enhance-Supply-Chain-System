@@ -10,7 +10,7 @@ const query = vi.spyOn(pool, 'query');
 const response = (rows: unknown[]) => ({ rows, rowCount: rows.length, command: 'SELECT', oid: 0, fields: [] });
 const valid = { fullName: 'New Storekeeper', email: 'New.Person@Example.com', organizationCode: 'qor-hq-01', requestedRole: 'WAREHOUSE_MANAGER', password: 'long-enough-password' };
 const send = (body: unknown) => request(createApp(new session.MemoryStore())).post('/api/v1/auth/access-requests').send(body as object);
-const GENERIC = 'If the company code is correct, your request has been sent to your administrator.';
+const SENT = 'Your request has been sent to your administrator.';
 beforeEach(() => { query.mockReset(); });
 
 describe('access requests from the sign-in page', () => {
@@ -34,7 +34,7 @@ describe('access requests from the sign-in page', () => {
       .mockResolvedValueOnce(response([]));                    // audit
     const res = await send(valid);
     expect(res.status).toBe(202);
-    expect(res.body.message).toBe(GENERIC);
+    expect(res.body.message).toBe(SENT);
     const insert = query.mock.calls[2] as unknown as [string, unknown[]];
     expect(insert[0]).toMatch(/INSERT INTO access_requests/);
     const [orgId, email, name, role, hash] = insert[1] as string[];
@@ -50,20 +50,27 @@ describe('access requests from the sign-in page', () => {
     expect((query.mock.calls[2] as unknown as [string, unknown[]])[1][3]).toBe('DRIVER');
   });
 
-  it('answers an unknown company code exactly like a valid one and saves nothing', async () => {
+  it('tells the person when the company code is wrong, and saves nothing', async () => {
     query.mockResolvedValueOnce(response([]));
     const res = await send({ ...valid, organizationCode: 'NOPE' });
-    expect(res.status).toBe(202);
-    expect(res.body.message).toBe(GENERIC);
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('COMPANY_NOT_FOUND');
     expect(query).toHaveBeenCalledTimes(1);
   });
 
-  it('answers an existing account exactly like a new one and saves nothing', async () => {
+  it('tells the person when an account with that email already exists, and saves nothing', async () => {
     query.mockResolvedValueOnce(response([{ id: 'org-1' }])).mockResolvedValueOnce(response([{ '?column?': 1 }]));
     const res = await send(valid);
-    expect(res.status).toBe(202);
-    expect(res.body.message).toBe(GENERIC);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('ACCOUNT_EXISTS');
     expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells the person when a request is already waiting', async () => {
+    query.mockResolvedValueOnce(response([{ id: 'org-1' }])).mockResolvedValueOnce(response([])).mockResolvedValueOnce(response([]));
+    const res = await send(valid);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('REQUEST_PENDING');
   });
 
   it('does not leak database errors', async () => {

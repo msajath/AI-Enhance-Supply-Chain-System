@@ -114,32 +114,35 @@ export function createAuthRouter(store?: session.Store) {
   });
   router.post('/signup', (_req,res) => { res.status(403).json(ApiResponse.error('Accounts must be provisioned by an administrator.', 'FORBIDDEN')); });
   // Public "Request an account" form. A request grants nothing: an administrator of the
-  // company must approve it (Admin > Access requests). The reply is identical whether or not
-  // the company code or email exist, so the form cannot be used to discover accounts.
-  router.post('/access-requests', rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-7', legacyHeaders: false, message: ApiResponse.error('Too many requests. Please try again later.', 'RATE_LIMITED') }), async (req, res) => {
+  // company must approve it (Admin > Access requests). Problems are reported clearly
+  // (unknown company code, existing account, request already waiting) so people are not
+  // told "sent" when nothing reached the administrator. The rate limit keeps this from
+  // being used to test many emails.
+  router.post('/access-requests', rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false, message: ApiResponse.error('Too many requests. Please try again in 15 minutes.', 'RATE_LIMITED') }), async (req, res) => {
     const parsed = accessRequestSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json(ApiResponse.error('Check your name, email, company code, role and password (at least 12 characters).', 'INVALID_INPUT')); return; }
     const v = parsed.data;
     try {
-      const passwordHash = await hash(v.password, 12);
       const org = (await pool.query('SELECT id FROM organizations WHERE upper(code) = upper($1) LIMIT 1', [v.organizationCode])).rows[0];
-      if (org) {
-        const exists = (await pool.query('SELECT 1 FROM users WHERE lower(email) = $1 LIMIT 1', [v.email])).rowCount;
-        if (!exists) {
-          const created = await pool.query(
-            `INSERT INTO access_requests (organization_id, email, full_name, requested_role, password_hash)
-             VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING RETURNING id`,
-            [org.id, v.email, v.fullName, v.requestedRole, passwordHash]);
-          if (created.rowCount) {
-            try {
-              await pool.query('INSERT INTO system_audit_logs (actor_id, event_type, module, metadata) VALUES (NULL, $1, $2, $3)',
-                ['ACCESS_REQUESTED', 'auth', JSON.stringify({ organization_id: org.id, request_id: created.rows[0].id, requested_role: v.requestedRole })]);
-            } catch (error) { logger.warn('Unable to record access request audit event', { error: (error as Error).message }); }
-          }
-        }
+      if (!org) { res.status(404).json(ApiResponse.error('We could not find that company code. Check it with your administrator.', 'COMPANY_NOT_FOUND')); return; }
+      if ((await pool.query('SELECT 1 FROM users WHERE lower(email) = $1 LIMIT 1', [v.email])).rowCount) {
+        res.status(409).json(ApiResponse.error('An account with this email already exists. Sign in instead, or ask your administrator to reset the password.', 'ACCOUNT_EXISTS')); return;
       }
-      res.status(202).json(ApiResponse.success(null, 'If the company code is correct, your request has been sent to your administrator.'));
-    } catch { res.status(503).json(ApiResponse.error('The request service is unavailable. Please try again later.', 'AUTH_UNAVAILABLE')); }
+      const passwordHash = await hash(v.password, 12);
+      const created = await pool.query(
+        `INSERT INTO access_requests (organization_id, email, full_name, requested_role, password_hash)
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING RETURNING id`,
+        [org.id, v.email, v.fullName, v.requestedRole, passwordHash]);
+      if (!created.rowCount) { res.status(409).json(ApiResponse.error('You already have a request waiting for approval. Your administrator will review it.', 'REQUEST_PENDING')); return; }
+      try {
+        await pool.query('INSERT INTO system_audit_logs (actor_id, event_type, module, metadata) VALUES (NULL, $1, $2, $3)',
+          ['ACCESS_REQUESTED', 'auth', JSON.stringify({ organization_id: org.id, request_id: created.rows[0].id, requested_role: v.requestedRole })]);
+      } catch (error) { logger.warn('Unable to record access request audit event', { error: (error as Error).message }); }
+      res.status(202).json(ApiResponse.success(null, 'Your request has been sent to your administrator.'));
+    } catch (error) {
+      logger.error('Access request failed', { error: (error as Error).message });
+      res.status(503).json(ApiResponse.error('The request service is unavailable. Please try again later.', 'AUTH_UNAVAILABLE'));
+    }
   });
   router.get(['/session', '/me'], async (req, res) => {
     if (!req.session.userId && bearerToken(req)) {
