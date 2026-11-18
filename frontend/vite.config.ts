@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    envDir: path.resolve(__dirname, '..'),
     server: {
       port: 5173,
       host: true,

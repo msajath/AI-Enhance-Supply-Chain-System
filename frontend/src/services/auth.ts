@@ -1,6 +1,8 @@
 import axios from 'axios';
 import {roleCatalog} from './roles';
 import { apiClient } from './api';
+import { ApiError } from './apiError';
+import { startSession, endSession } from './session';
 
 // Authentication uses an HttpOnly session cookie; no token is exposed to React.
 export interface AuthUser {
@@ -16,7 +18,9 @@ export interface AuthUser {
 
 export async function login(credentials: { email: string; password: string }): Promise<AuthUser> {
   const response = await apiClient.post('/api/v1/auth/login', credentials, { withCredentials: true });
-  return parseUser(response.data);
+  const user=parseUser(response.data);
+  startSession();
+  return user;
 }
 
 function parseUser(data: unknown): AuthUser {
@@ -31,6 +35,13 @@ function parseUser(data: unknown): AuthUser {
 }
 
 export function loginErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status===401||error.status===403) return 'Email or password is incorrect.';
+    if (error.status===400||error.status===422) return 'Check your email and password and try again.';
+    if (error.status===429) return 'Too many sign-in attempts. Please wait before trying again.';
+    if (error.kind==='timeout') return 'Sign-in timed out. Please try again.';
+    return error.message;
+  }
   if (!axios.isAxiosError(error)) return 'Unable to sign in. Please try again later.';
   const status = error.response?.status;
   if (status === 401 || status === 403) return 'Email or password is incorrect.';
@@ -46,10 +57,12 @@ export async function restoreSession(): Promise<AuthUser | null> {
     const response = await apiClient.get('/api/v1/auth/me', { withCredentials: true });
     return parseUser(response.data);
   } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 401) return null;
+    if (error instanceof ApiError && error.status===401 || axios.isAxiosError(error) && error.response?.status === 401) return null;
     throw error;
   }
 }
 export async function logout(): Promise<void> {
-  await apiClient.post('/api/v1/auth/logout', {}, { withCredentials: true });
+  try { await apiClient.post('/api/v1/auth/logout', {}, { withCredentials: true }); }
+  catch(error) { if (!(error instanceof ApiError && error.status===401)) throw error; }
+  endSession();
 }

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AxiosError, AxiosHeaders } from 'axios';
 import App from './App';
 import { apiClient } from './services/api';
 import { loginErrorMessage } from './services/auth';
 import { roleCatalog } from './services/roles';
+import { expireSession, endSession } from './services/session';
 
 const user = { id: 'u1', email: 'member@example.com', full_name: 'Test Member', role: 'Fleet manager' };
 const post = vi.spyOn(apiClient, 'post');
@@ -15,7 +16,7 @@ const failure = (status?: number, code?: string) => new AxiosError('private data
   status ? { status, data: { error: 'account exists' }, statusText: '', headers: new AxiosHeaders(), config: { headers: new AxiosHeaders() } } : undefined);
 const otherData=(url:string)=>url.endsWith('/context')?{projects:[],sites:[],warehouses:[],organization:{id:'org',name:'Test organization'},permissions:[]}:url.endsWith('/dashboard')?{cards:[],activity:[],alerts:[]}:{rows:[]};
 function restored() { get.mockImplementation(async url=>({data:{success:true,data:String(url).includes('/auth/')?{user}:otherData(String(url))}})); }
-beforeEach(() => { window.history.replaceState({},'', '/login'); post.mockReset();get.mockImplementation(async url=>{if(String(url).includes('/auth/'))throw failure(401);return {data:{success:true,data:otherData(String(url))}};}); localStorage.clear(); });
+beforeEach(() => { endSession(); window.history.replaceState({},'', '/login'); post.mockReset();get.mockImplementation(async url=>{if(String(url).includes('/auth/'))throw failure(401);return {data:{success:true,data:otherData(String(url))}};}); localStorage.clear(); });
 async function fill() {
   const keyboard = userEvent.setup();
   await keyboard.type(screen.getByLabelText('Work email'), 'member@example.com');
@@ -93,6 +94,26 @@ describe('login', () => {
 
 
 describe('session lifecycle', () => {
+  it('redirects an expired protected session to login without loops',async()=>{
+    restored();render(<App/>);await screen.findByRole('heading',{name:/Good morning/});
+    act(()=>{expireSession();expireSession();});
+    await screen.findByRole('heading',{name:'Sign in to your workspace'});
+    expect(window.location.pathname).toBe('/login');
+    expect(post).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading',{name:/Good morning/})).not.toBeInTheDocument();
+  });
+  it('does not restore a logged-out user from a delayed focus check',async()=>{
+    restored();post.mockResolvedValue({data:{success:true,data:null}});
+    render(<App/>);await screen.findByRole('heading',{name:/Good morning/});
+    let resolve!:(value:unknown)=>void;
+    get.mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
+    fireEvent(window,new Event('focus'));
+    await userEvent.click(screen.getByTitle('Sign out'));
+    await screen.findByRole('heading',{name:'Sign in to your workspace'});
+    await act(async()=>resolve({data:{success:true,data:{user}}}));
+    expect(screen.getByRole('heading',{name:'Sign in to your workspace'})).toBeVisible();
+  });
+
   it.each(roleCatalog)('restores $code into its own workspace', async role => {
     const account={...user,role:role.label,permissions:['dashboard.'+role.prefix+'.read']};
     get.mockImplementation(async url=>({data:{success:true,data:String(url).includes('/auth/')?{user:account}:otherData(String(url))}}));
@@ -145,7 +166,7 @@ describe('session lifecycle', () => {
     render(<App/>);
     await screen.findByRole('heading', { name: /Good morning/ });
     await userEvent.click(screen.getByTitle('Sign out'));
-    expect(await screen.findByText('Unable to load or save data. Please try again.')).toBeVisible();
+    expect(await screen.findByText('This service is temporarily unavailable. Please try again.')).toBeVisible();
     expect(screen.getByRole('heading', { name: /Good morning/ })).toBeVisible();
   });
 });

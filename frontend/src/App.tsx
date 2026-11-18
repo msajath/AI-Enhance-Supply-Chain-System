@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';
 import {BrowserRouter,Routes,Route,Navigate,NavLink,useLocation,Link} from 'react-router-dom';
 import {roleCatalog} from './services/roles';
-import {apiClient} from './services/api';
+import {expireSession,onSessionExpired,sessionGeneration,startSession} from './services/session';
 import {logout,restoreSession,type AuthUser} from './services/auth';
 import {read,write,errorMessage,emptyContext,type Context,type Row} from './services/management';
 import LoginPage from './pages/Login';
@@ -56,11 +56,11 @@ function Application() {
  const [user,setUser]=useState<AuthUser|null>(null),[restoring,setRestoring]=useState(true),[sessionError,setSessionError]=useState(''),[email,setEmail]=useState('');
  const [theme,setTheme]=useState<Theme>(()=>localStorage.getItem('qorvenz-theme')==='dark'?'dark':'light');
  const toggleTheme=()=>setTheme(t=>{const next=t==='light'?'dark':'light';localStorage.setItem('qorvenz-theme',next);return next;});
- const expire=()=>{setUser(null);setSessionError('Your session has expired. Please sign in again.');};
- useEffect(()=>{let active=true;restoreSession().then(u=>{if(active)setUser(u);}).catch(()=>{if(active)setSessionError('Unable to restore your session. Please sign in again.');}).finally(()=>{if(active)setRestoring(false);});return()=>{active=false;};},[]);
- useEffect(()=>{const id=apiClient.interceptors.response.use(r=>r,e=>{if(e.response?.status===401&&!String(e.config?.url).includes('/auth/'))expire();return Promise.reject(e);});return()=>apiClient.interceptors.response.eject(id);},[]);
+ const expire=()=>expireSession();
+ useEffect(()=>{let active=true;const generation=sessionGeneration();restoreSession().then(u=>{if(active&&generation===sessionGeneration()){if(u)startSession();setUser(u);}}).catch(()=>{if(active)setSessionError('Unable to restore your session. Please sign in again.');}).finally(()=>{if(active)setRestoring(false);});return()=>{active=false;};},[]);
+ useEffect(()=>onSessionExpired(()=>{setUser(null);setSessionError('Your session has expired. Please sign in again.');}),[]);
  const userId=user?.id;
- useEffect(()=>{if(!userId)return;const check=()=>{restoreSession().then(u=>{if(!u)expire();else setUser(u);}).catch(()=>{/* Existing data remains visible during a temporary connection failure. */});};const timer=window.setInterval(check,60000);window.addEventListener('focus',check);return()=>{window.clearInterval(timer);window.removeEventListener('focus',check);};},[userId]);
+ useEffect(()=>{if(!userId)return;const check=()=>{const generation=sessionGeneration();restoreSession().then(u=>{if(generation!==sessionGeneration())return;if(!u)expireSession(generation);else setUser(u);}).catch(()=>{/* Existing data remains visible during a temporary connection failure. */});};const timer=window.setInterval(check,60000);window.addEventListener('focus',check);return()=>{window.clearInterval(timer);window.removeEventListener('focus',check);};},[userId]);
  const signIn=(u:AuthUser)=>{setSessionError('');setUser(u);};
  const onLogout=async()=>{await logout();setUser(null);setEmail('');};
  if(restoring)return <main className="login-page"><p role="status">Restoring your session...</p></main>;
