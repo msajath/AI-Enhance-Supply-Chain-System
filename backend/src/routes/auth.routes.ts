@@ -11,9 +11,11 @@ import { logger } from '../utils/logger';
 import { env } from '../config/env';
 import { ApiResponse } from '../utils/apiResponse';
 
+import { ROLES, ROLE_LABELS, PERMISSIONS, DASHBOARD_PREFIX, isRole } from '../auth/permissions';
+
 const dummyHash = hashSync(randomBytes(32).toString('hex'), 12);
-const roleNames: Record<string, string> = { ADMIN: 'Admin', WAREHOUSE_MANAGER: 'Warehouse manager', FLEET_MANAGER: 'Fleet manager' };
-const roleCodeSchema = z.enum(['ADMIN', 'WAREHOUSE_MANAGER', 'FLEET_MANAGER']);
+const roleNames: Record<string, string> = ROLE_LABELS;
+const roleCodeSchema = z.enum(ROLES);
 const credentialsSchema = z.object({
   email: z.string().trim().email().max(255),
   password: z.string().min(1).max(72).refine(value => Buffer.byteLength(value, 'utf8') <= 72),
@@ -37,7 +39,7 @@ async function recordAuthEvent(actorId: string, eventType: string, metadata: Rec
 }
 
 function publicUser(row: { id: string; email: string; full_name: string; role: string }) {
-  return { id: row.id, email: row.email, full_name: row.full_name, role: roleNames[row.role] };
+  return { id: row.id, email: row.email, full_name: row.full_name, role: roleNames[row.role], roleCode: row.role, roles: [row.role], permissions: isRole(row.role) ? PERMISSIONS[row.role] : [], dashboard: isRole(row.role) ? '/' + DASHBOARD_PREFIX[row.role] + '/dashboard' : null };
 }
 
 function bearerToken(req: import('express').Request): string | undefined {
@@ -56,7 +58,7 @@ async function authenticatedUser(req: import('express').Request) {
   if (typeof decoded.sub !== 'string') return undefined;
   const result = await pool.query('SELECT id, email, full_name, role, is_active, auth_version FROM users WHERE id = $1 LIMIT 1', [decoded.sub]);
   const row = result.rows[0];
-  return row?.is_active && roleNames[row.role] && (decoded.av ?? 0) === (row.auth_version ?? 0) ? row : undefined;
+  return row?.is_active && isRole(row.role) && (decoded.av ?? 0) === (row.auth_version ?? 0) ? row : undefined;
 }
 
 export function createAuthRouter(store?: session.Store) {
@@ -81,7 +83,7 @@ export function createAuthRouter(store?: session.Store) {
       const row = result.rows[0];
       // Always perform a password hash comparison, including for unknown accounts.
       const matches = await compare(parsed.data.password, row?.password_hash ?? dummyHash);
-      const role = row && roleNames[row.role];
+      const role = row && isRole(row.role) && roleNames[row.role];
       if (!matches || !row?.is_active || !role) {
         res.status(401).json(ApiResponse.error('Email or password is incorrect.', 'INVALID_CREDENTIALS')); return;
       }
@@ -113,7 +115,7 @@ export function createAuthRouter(store?: session.Store) {
     try {
       const result = await pool.query('SELECT id, email, full_name, role, is_active, auth_version FROM users WHERE id = $1', [req.session.userId]);
       const row = result.rows[0];
-      const role = row && roleNames[row.role];
+      const role = row && isRole(row.role) && roleNames[row.role];
       if (!row?.is_active || !role || (row.auth_version ?? 0) !== (req.session.authVersion ?? 0)) {
         await new Promise<void>((resolve, reject) => req.session.destroy(error => error ? reject(error) : resolve()));
         res.clearCookie(cookieName, { path: cookie.path, httpOnly: cookie.httpOnly, secure: cookie.secure, sameSite: cookie.sameSite });

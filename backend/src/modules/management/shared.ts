@@ -2,7 +2,8 @@ import type { PoolClient } from 'pg';
 import type { Request, RequestHandler } from 'express';
 import { z } from 'zod';
 import { ApiResponse, AppError } from '../../utils/apiResponse';
-import { PERMISSIONS } from '../../auth/permissions';
+import { hasPermission } from '../../auth/permissions';
+import { recordAccessDenied } from '../../middleware/authorize';
 import type { AuthContext } from '../../middleware/authenticate';
 export const uuid = z.string().uuid();
 export const text = z.string().trim().min(1).max(255);
@@ -20,11 +21,12 @@ export const safe = (handler: (req: Request, res: Parameters<RequestHandler>[1])
   res.status(503).json(ApiResponse.error('This service is temporarily unavailable. Please try again.','SERVICE_UNAVAILABLE'));
  }
 };
-export const permit = (permission:string):RequestHandler => (req,res,next)=>{
+export const permit = (permission:string):RequestHandler => async(req,res,next)=>{
  if(!req.auth) { res.status(401).json(ApiResponse.error('Authentication required.','UNAUTHENTICATED')); return; }
- if(!PERMISSIONS[req.auth.role].includes(permission)) { res.status(403).json(ApiResponse.error('You do not have permission to perform this action.','FORBIDDEN')); return; }
+ if(!hasPermission(req.auth.role, permission)) { await recordAccessDenied(req,'PERMISSION_NOT_PERMITTED',{requiredPermissions:[permission]}); res.status(403).json(ApiResponse.error('You do not have permission to perform this action.','FORBIDDEN')); return; }
  next();
 };
+export const requirePermission = permit;
 export async function audit(c:PoolClient,a:AuthContext,event:string,data:unknown) {
  await c.query('INSERT INTO system_audit_logs(actor_id,event_type,module,metadata) VALUES($1,$2,$3,$4)',[a.userId,event,'management',JSON.stringify({organization_id:a.organizationId,...data as object})]);
 }

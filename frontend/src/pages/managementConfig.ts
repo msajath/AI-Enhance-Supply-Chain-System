@@ -1,3 +1,4 @@
+import {roleCatalog} from '../services/roles';
 export interface Field { key:string;label:string;type?:'text'|'number'|'date'|'datetime-local'|'password'|'email'|'checkbox'|'textarea';options?:string[];ref?:string;optional?:boolean;min?:number;hint?:string }
 export interface Resource { title:string;description:string;path:string;fields:Field[];columns:string[];edit?:boolean;create?:boolean;actions?:string[] }
 const f=(key:string,label:string,extra:Partial<Field>={}):Field=>({key,label,...extra});
@@ -7,7 +8,7 @@ const asset=[project,site,f('vehicle_number','Registration / asset number'),f('m
 const stock=[f('warehouse_id','Source warehouse',{ref:'warehouses'}),f('material_id','Material',{ref:'materials'}),f('quantity','Quantity',{type:'number',min:0}),f('reference','Unique reference'),f('reason','Reason / supplier details',{type:'textarea'}),f('batch','Batch / lot',{optional:true})];
 const document=(title:string,path:string,kind:string,fields:Field[]=stock):Resource=>({title,path:'warehouse/'+path,description:"Create a traceable record, then confirm the operation. Quantities use the selected material's unit.",fields,columns:['reference','material_name','warehouse_name','quantity','status','created_at'],create:true,actions:kind==='TRANSFER'?['dispatch','receive','cancel']:['post','cancel']});
 export const resources:Record<string,Resource>={
- 'admin/users':{title:'Users',description:'Manage accounts, role assignments and authorized projects and locations.',path:'admin/users',fields:[f('full_name','Full name'),f('email','Work email',{type:'email'}),f('role','Role',{options:['ADMIN','FLEET_MANAGER','WAREHOUSE_MANAGER']}),f('password','Initial password',{type:'password',hint:'At least 12 characters. Share through your approved secure channel.'}),f('is_active','Active',{type:'checkbox'})],columns:['full_name','email','role','is_active'],create:true,edit:true,actions:['access','password']},
+ 'admin/users':{title:'Users',description:'Manage accounts, role assignments and authorized projects and locations.',path:'admin/users',fields:[f('full_name','Full name'),f('email','Work email',{type:'email'}),f('role','Role',{options:roleCatalog.map(role=>role.code)}),f('password','Initial password',{type:'password',hint:'At least 12 characters. Share through your approved secure channel.'}),f('is_active','Active',{type:'checkbox'})],columns:['full_name','email','role','is_active'],create:true,edit:true,actions:['access','password']},
  'admin/projects':{title:'Projects',description:'Configure projects and lifecycle status. Use Completed or Cancelled to archive work.',path:'admin/projects',fields:[f('code','Project code'),f('name','Project name'),status(['ACTIVE','PLANNED','ON_HOLD','COMPLETED','CANCELLED']),f('start_date','Start date',{type:'date',optional:true}),f('end_date','End date',{type:'date',optional:true})],columns:['code','name','status','start_date','end_date'],create:true,edit:true},
  'admin/sites':{title:'Sites',description:"Manage construction sites within your organization's projects.",path:'admin/sites',fields:[project,f('code','Site code'),f('name','Site name'),f('address','Address',{type:'textarea',optional:true}),status(['ACTIVE','INACTIVE','CLOSED'])],columns:['code','name','project_id','address','status'],create:true,edit:true},
  'admin/warehouses':{title:'Warehouses',description:'Register locations and assign managers through Users ? Access.',path:'admin/warehouses',fields:[f('code','Warehouse code'),f('name','Name'),f('location','Location'),f('capacity','Storage capacity',{type:'number'}),f('warehouse_type','Warehouse type',{options:['CENTRAL','REGIONAL','SITE']}),site,f('is_active','Active',{type:'checkbox'})],columns:['code','name','location','warehouse_type','is_active'],create:true,edit:true},
@@ -36,4 +37,27 @@ export const nav:Record<string,{path:string;label:string}[]>={
  fleet:[['dashboard','Fleet Overview'],['vehicles','Vehicles'],['drivers','Drivers'],['assignments','Assignments'],['equipment','Equipment'],['maintenance','Maintenance'],['fuel','Fuel Records'],['reports','Fleet Reports']].map(([p,label])=>({path:'/fleet/'+p,label})),
  warehouse:[['dashboard','Warehouse Overview'],['inventory','Inventory'],['materials','Material Master'],['receipts','Goods Receiving'],['issues','Stock Issues'],['transfers','Stock Transfers'],['counts','Stock Counts'],['adjustments','Stock Adjustments'],['returns','Returns & Damage'],['reports','Stock Reports'],['movements','Movement History']].map(([p,label])=>({path:'/warehouse/'+p,label})),
 };
-export function rolePrefix(role:string) { return role==='Admin'?'admin':role==='Fleet manager'?'fleet':'warehouse'; }
+export function rolePrefix(role:string) { return roleCatalog.find(entry=>entry.label===role)?.prefix ?? 'unassigned'; }
+
+// Reuse existing read views; write controls are excluded for these workspaces.
+for(const role of roleCatalog.filter(role=>!['admin','fleet','warehouse'].includes(role.prefix))) {
+ nav[role.prefix]=[{path:'/'+role.prefix+'/dashboard',label:'Overview'}];
+ const shared= ['management','site','auditor'].includes(role.prefix) ? ['warehouse/inventory','warehouse/movements'] : [];
+ if(['management','auditor'].includes(role.prefix))shared.push('fleet/vehicles','fleet/reports');
+ for(const source of shared) {
+  const key=role.prefix+'/'+source.replaceAll('/','-'), original=resources[source];
+  resources[key]={...original,create:false,edit:false,actions:[]};
+  nav[role.prefix].push({path:'/'+key,label:original.title});
+ }
+}
+
+resources['auditor/audit']={...resources['admin/audit'],path:'review/audit'};
+nav.auditor.push({path:'/auditor/audit',label:'Audit logs'});
+export function navigationPermission(path:string):string {
+ const [prefix,page]=path.slice(1).split('/');
+ if(page==='dashboard')return 'dashboard.'+prefix+'.read';
+ if(page==='audit')return 'audit.read';
+ if(page==='warehouse-inventory'||page==='warehouse-movements')return 'inventory.read';
+ if(page==='fleet-vehicles'||page==='fleet-reports')return 'fleet.vehicles.read';
+ return prefix==='admin'?'users.read':prefix==='fleet'?'fleet.vehicles.read':'inventory.read';
+}

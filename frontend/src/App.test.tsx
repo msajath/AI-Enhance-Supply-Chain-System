@@ -5,6 +5,7 @@ import { AxiosError, AxiosHeaders } from 'axios';
 import App from './App';
 import { apiClient } from './services/api';
 import { loginErrorMessage } from './services/auth';
+import { roleCatalog } from './services/roles';
 
 const user = { id: 'u1', email: 'member@example.com', full_name: 'Test Member', role: 'Fleet manager' };
 const post = vi.spyOn(apiClient, 'post');
@@ -92,6 +93,30 @@ describe('login', () => {
 
 
 describe('session lifecycle', () => {
+  it.each(roleCatalog)('restores $code into its own workspace', async role => {
+    const account={...user,role:role.label,permissions:['dashboard.'+role.prefix+'.read']};
+    get.mockImplementation(async url=>({data:{success:true,data:String(url).includes('/auth/')?{user:account}:otherData(String(url))}}));
+    render(<App/>);
+    await screen.findByRole('heading',{name:/Good morning, Test/});
+    expect(window.location.pathname).toBe('/'+role.prefix+'/dashboard');
+    expect(screen.queryByRole('link',{name:'Users'})).not.toBeInTheDocument();
+  });
+  it('blocks an auditor from an administrative URL',async()=>{
+    window.history.replaceState({},'', '/admin/users');
+    get.mockImplementation(async()=>({data:{success:true,data:{user:{...user,role:'Auditor'}}}}));
+    render(<App/>);
+    expect(await screen.findByRole('heading',{name:'Access Denied'})).toBeVisible();
+    expect(get).not.toHaveBeenCalledWith('/api/v1/admin/users');
+  });
+  it('renders auditor inventory without write controls',async()=>{
+    window.history.replaceState({},'', '/auditor/warehouse-inventory');
+    const account={...user,role:'Auditor',permissions:['dashboard.auditor.read','inventory.read']};
+    get.mockImplementation(async url=>({data:{success:true,data:String(url).includes('/auth/')?{user:account}:otherData(String(url))}}));
+    render(<App/>);
+    await screen.findByRole('heading',{name:'Inventory'});
+    expect(screen.queryByRole('button',{name:/Create|Add|Edit/})).not.toBeInTheDocument();
+    expect(get).toHaveBeenCalledWith('/api/v1/warehouse/inventory',{withCredentials:true});
+  });
   it('restores an authenticated user before rendering the dashboard', async () => {
     restored();
     render(<App/>);

@@ -36,10 +36,10 @@ export function ResourcePage({resource,context,onChanged,scope}:{resource:Resour
   read<{rows:Row[]}>(resource.path).then(data=>{if(active)setRows(data.rows);}).catch(e=>{if(active)setError(errorMessage(e));}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};
  },[resource.path,revision]);
  useEffect(()=>{let active=true;const loads:Promise<unknown>[]=[];
-  if(resource.path.startsWith('fleet/'))loads.push(Promise.all([read<{rows:Row[]}>('fleet/vehicles'),read<{rows:Row[]}>('fleet/equipment'),read<{rows:Row[]}>('fleet/drivers')]).then(([v,e,d])=>{if(active)setRefs({assets:[...v.rows,...e.rows],drivers:d.rows});}));
-  if(resource.path.startsWith('warehouse/'))loads.push(read<{rows:Row[]}>('warehouse/materials').then(m=>{if(active)setRefs({materials:m.rows});}));
+  if((resource.create||resource.edit)&&resource.path.startsWith('fleet/'))loads.push(Promise.all([read<{rows:Row[]}>('fleet/vehicles'),read<{rows:Row[]}>('fleet/equipment'),read<{rows:Row[]}>('fleet/drivers')]).then(([v,e,d])=>{if(active)setRefs({assets:[...v.rows,...e.rows],drivers:d.rows});}));
+  if((resource.create||resource.edit)&&resource.path.startsWith('warehouse/'))loads.push(read<{rows:Row[]}>('warehouse/materials').then(m=>{if(active)setRefs({materials:m.rows});}));
   Promise.all(loads).catch(e=>{if(active)setError(errorMessage(e));});return()=>{active=false;};
- },[resource.path,revision]);
+ },[resource.path,resource.create,resource.edit,revision]);
  const openEditor=(row:Row|'new')=>{
   setError('');setEditor(row);setValues(Object.fromEntries(resource.fields.filter(f=>!(row!=='new'&&f.key==='password')).map(f=>{
    let value:unknown=row==='new'?(f.type==='checkbox'?true:f.options?.[0]??(f.type==='number'?'0':f.key==='project_id'&&context.projects.some(p=>p.id===scope)?scope:f.key==='warehouse_id'&&context.warehouses.some(w=>w.id===scope)?scope:'')):row[f.key];

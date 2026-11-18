@@ -112,3 +112,5 @@ npm run build
 - [Development Environment Setup](docs/DEVELOPMENT_SETUP.md)
 - [Team Git & Collaboration Workflow](docs/TEAM_WORKFLOW.md)
 - [Environment Verification Results](docs/ENVIRONMENT_VERIFICATION.md)
+
+- [Sprint 2 access foundation, permission matrix and verification](docs/SPRINT2_ACCESS_IMPLEMENTATION.md)

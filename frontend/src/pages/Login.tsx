@@ -40,7 +40,7 @@ export default function LoginPage({ onSignIn, sessionError, email, setEmail, the
       setLoading(true);
       try {
         // Submit access request / registration
-        setSignupNotice(`Access request registered for ${email.trim()}. Your workspace administrator must assign project scopes before your initial sign-in.`);
+        setSignupNotice(`Contact your workspace administrator to request an account for ${email.trim()}. This form does not submit an access request.`);
       } catch {
         setLoginError('Unable to register request. Contact your administrator.');
       } finally {

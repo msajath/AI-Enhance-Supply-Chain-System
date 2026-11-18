@@ -1,4 +1,5 @@
 import axios from 'axios';
+import {roleCatalog} from './roles';
 import { apiClient } from './api';
 
 // Authentication uses an HttpOnly session cookie; no token is exposed to React.
@@ -6,7 +7,11 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name: string;
-  role: 'Admin' | 'Warehouse manager' | 'Fleet manager';
+  role: (typeof roleCatalog)[number]['label'];
+  roleCode?: string;
+  roles?: string[];
+  permissions?: string[];
+  dashboard?: string;
 }
 
 export async function login(credentials: { email: string; password: string }): Promise<AuthUser> {
@@ -19,10 +24,10 @@ function parseUser(data: unknown): AuthUser {
   const user = response.data?.data?.user;
   if (response.data?.success !== true || !user || typeof user.id !== 'string' || !user.id ||
       typeof user.email !== 'string' || typeof user.full_name !== 'string' || !user.full_name.trim() ||
-      !['Admin', 'Warehouse manager', 'Fleet manager'].includes(user.role)) {
+      !roleCatalog.some(role => role.label === user.role)) {
     throw new Error('INVALID_AUTH_RESPONSE');
   }
-  return { id: user.id, email: user.email, full_name: user.full_name, role: user.role };
+  return { id: user.id, email: user.email, full_name: user.full_name, role: user.role, roleCode: user.roleCode, roles: user.roles, permissions: user.permissions, dashboard: user.dashboard };
 }
 
 export function loginErrorMessage(error: unknown): string {
