@@ -119,4 +119,11 @@ describe('AESCS-32 centralized API client',()=>{
  it('normalizes malformed JSON transport failures',()=>{
   expect(normalizeApiError(new AxiosError('JSON syntax internals','ERR_BAD_RESPONSE'))).toMatchObject({kind:'invalid_response'});
  });
+ it.each([
+  {permissions:'users.read'}, {permissions:{}}, {permissions:[null]},
+  {roles:'ADMIN'}, {roles:[1]}, {roleCode:{}}, {dashboard:[]},
+ ])('rejects malformed authentication metadata: %j',async metadata=>{
+  apiClient.defaults.adapter=respond(200,{success:true,data:{user:{id:'u1',email:'member@example.test',full_name:'Test Member',role:'Admin',...metadata}}});
+  await expect(login({email:'member@example.test',password:'test-only'})).rejects.toThrow();
+ });
 });

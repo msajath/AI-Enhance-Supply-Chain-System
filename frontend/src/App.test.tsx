@@ -6,10 +6,11 @@ import App from './App';
 import { apiClient } from './services/api';
 import { loginErrorMessage } from './services/auth';
 import { roleCatalog } from './services/roles';
-import { expireSession, endSession } from './services/session';
+import { expireSession, endSession, onSessionExpired } from './services/session';
 
 const user = { id: 'u1', email: 'member@example.com', full_name: 'Test Member', role: 'Fleet manager' };
 const post = vi.spyOn(apiClient, 'post');
+const realGet = apiClient.get.bind(apiClient);
 const get = vi.spyOn(apiClient, 'get');
 async function renderLogin() { render(<App/>); await screen.findByRole('heading', { name: 'Sign in to your workspace' }); }
 const failure = (status?: number, code?: string) => new AxiosError('private database details', code, undefined, undefined,
@@ -94,6 +95,35 @@ describe('login', () => {
 
 
 describe('session lifecycle', () => {
+  it.each([401,403])('handles a real client HTTP %s through the React route guard',async status=>{
+    const original=apiClient.defaults.adapter,expired=vi.fn(),unsubscribe=onSessionExpired(expired);
+    get.mockImplementation((url,config)=>realGet(url,config));
+    apiClient.defaults.adapter=async config=>{
+      const response={config,status:200,statusText:'OK',headers:new AxiosHeaders(),data:{success:true,data:{user}}};
+      if(String(config.url).includes('/auth/me'))return response;
+      throw new AxiosError('internal error','ERR_BAD_REQUEST',config,undefined,{...response,status,data:{success:false,error:{message:'private SQL details'}}});
+    };
+    try{
+      render(<App/>);
+      if(status===401){
+        await screen.findByRole('heading',{name:'Sign in to your workspace'});
+        expect(window.location.pathname).toBe('/login');
+        expect(expired).toHaveBeenCalledTimes(1);
+        expect(post).not.toHaveBeenCalled();
+      }else{
+        await screen.findAllByRole('alert');
+        expect(screen.getByRole('heading',{name:/Good (morning|afternoon|evening), Test/})).toBeVisible();
+        expect(window.location.pathname).toBe('/fleet/dashboard');
+        expect(expired).not.toHaveBeenCalled();
+        expect(screen.queryByText(/private SQL/)).not.toBeInTheDocument();
+      }
+    }finally{apiClient.defaults.adapter=original;unsubscribe();}
+  });
+  it('rejects malformed permission metadata before rendering protected routes',async()=>{
+    get.mockResolvedValue({data:{success:true,data:{user:{...user,permissions:{}}}}});
+    await renderLogin();
+    expect(screen.getByRole('status')).toHaveTextContent('Unable to restore your session');
+  });
   it('redirects an expired protected session to login without loops',async()=>{
     restored();render(<App/>);await screen.findByRole('heading',{name:/Good (morning|afternoon|evening)/});
     act(()=>{expireSession();expireSession();});

@@ -20,7 +20,9 @@ const server=createServer((req,res)=>{
  }
  if(req.url?.includes('/invalid')) {res.end('{invalid-json');return;}
  if(req.url?.includes('/empty')) {res.statusCode=204;res.end();return;}
- res.end(JSON.stringify({success:true,data:{contentType:req.headers['content-type']??null}}));
+ const chunks:Buffer[]=[];
+ req.on('data',chunk=>chunks.push(Buffer.from(chunk)));
+ req.on('end',()=>res.end(JSON.stringify({success:true,data:{method:req.method,body:Buffer.concat(chunks).toString(),contentType:req.headers['content-type']??null}})));
 });
 beforeAll(async()=>{
  await new Promise<void>((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
@@ -34,6 +36,12 @@ afterAll(async()=>{
  await new Promise<void>(resolve=>server.close(()=>resolve()));
 });
 describe('AESCS-32 browser transport',()=>{
+ it.each(['get','post','put','patch','delete'] as const)('sends %s with the expected method and JSON data',async method=>{
+  const response=await apiClient.request({url:'/api/v1/method',method,baseURL,...(method==='get'?{}:{data:{reference:'test-record'}})});
+  expect(response.data.data.method).toBe(method.toUpperCase());
+  if(method==='get')expect(response.data.data.body).toBe('');
+  else expect(JSON.parse(response.data.data.body)).toEqual({reference:'test-record'});
+ });
  it('aborts a request at its configured timeout',async()=>{
   await expect(apiClient.get('/api/v1/slow',{baseURL,timeout:30})).rejects.toMatchObject({kind:'timeout',code:'TIMEOUT'});
  });

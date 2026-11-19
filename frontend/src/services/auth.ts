@@ -28,10 +28,17 @@ function parseUser(data: unknown): AuthUser {
   const user = response.data?.data?.user;
   if (response.data?.success !== true || !user || typeof user.id !== 'string' || !user.id ||
       typeof user.email !== 'string' || typeof user.full_name !== 'string' || !user.full_name.trim() ||
-      !roleCatalog.some(role => role.label === user.role)) {
-    throw new Error('INVALID_AUTH_RESPONSE');
+      !roleCatalog.some(role => role.label === user.role) ||
+      !optionalStringList(user.permissions) || !optionalStringList(user.roles) ||
+      user.roleCode !== undefined && typeof user.roleCode !== 'string' ||
+      user.dashboard !== undefined && typeof user.dashboard !== 'string') {
+    throw new ApiError('Unable to sign in. Please try again later.', 'invalid_response', undefined, 'INVALID_AUTH_RESPONSE');
   }
   return { id: user.id, email: user.email, full_name: user.full_name, role: user.role, roleCode: user.roleCode, roles: user.roles, permissions: user.permissions, dashboard: user.dashboard };
+}
+
+function optionalStringList(value: unknown): value is string[] | undefined {
+  return value === undefined || Array.isArray(value) && value.every(item => typeof item === 'string');
 }
 
 export function loginErrorMessage(error: unknown): string {
