@@ -16,9 +16,12 @@ const definitions = {
 export function createAdminRouter() {
  const r=Router();
  r.use(permit('users.read'));
- r.get('/roles',safe(async(_req,res)=>res.json(ApiResponse.success({rows:ROLES.map(role=>({id:role,name:ROLE_LABELS[role],permissions:PERMISSIONS[role]}))}))));
+ r.get('/roles',safe(async(req,res)=>{
+  const result=await pool.query('SELECT id,role_name,description FROM roles WHERE organization_id=$1 AND role_name=ANY($2::text[]) ORDER BY role_name',[req.auth!.organizationId,ROLES]);
+  res.json(ApiResponse.success({rows:result.rows.map(row=>({id:row.role_name,database_id:row.id,name:ROLE_LABELS[row.role_name as keyof typeof ROLE_LABELS],description:row.description,permissions:PERMISSIONS[row.role_name as keyof typeof PERMISSIONS]}))}));
+ }));
  r.get('/users',safe(async(req,res)=>{
-  const users=await pool.query(`SELECT id,email,full_name,role,is_active,created_at,
+  const users=await pool.query(`SELECT id,email,full_name,role,role_id,is_active,created_at,
     ARRAY(SELECT project_id FROM user_project_access WHERE user_id=u.id) project_ids,
     ARRAY(SELECT warehouse_id FROM user_warehouse_access WHERE user_id=u.id) warehouse_ids,
     ARRAY(SELECT site_id FROM user_site_access WHERE user_id=u.id) site_ids FROM users u WHERE organization_id=$1 ORDER BY full_name`,[req.auth!.organizationId]);
@@ -71,6 +74,7 @@ export function createAdminRouter() {
     await c.query(`DELETE FROM ${table} WHERE user_id=$1`,[id]);
     for(const resource of new Set(ids)) await c.query(`INSERT INTO ${table}(user_id,${column},organization_id) VALUES($1,$2,$3)`,[id,resource,a.organizationId]);
    }
+   await c.query('UPDATE users SET auth_version=auth_version+1 WHERE id=$1',[id]);
    await audit(c,a,'ACCESS_ASSIGNED',{user_id:id,...v});
   });res.json(ApiResponse.success(null));
  }));

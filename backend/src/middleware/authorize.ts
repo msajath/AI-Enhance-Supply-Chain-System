@@ -27,8 +27,8 @@ export function isUuid(value: unknown): value is string {
 /** Logs and audits a denial. Never throws: an audit failure must not turn a 403 into a 500. */
 export async function recordAccessDenied(
   req: Request,
-  reason: 'ROLE_NOT_PERMITTED' | 'PROJECT_OUT_OF_SCOPE',
-  details: { projectId?: string; requiredRoles?: readonly string[] } = {}
+  reason: 'ROLE_NOT_PERMITTED' | 'PROJECT_OUT_OF_SCOPE' | 'PERMISSION_NOT_PERMITTED',
+  details: { projectId?: string; requiredRoles?: readonly string[]; requiredPermissions?: readonly string[] } = {}
 ): Promise<void> {
   const event = {
     actorId: req.auth?.userId ?? null,

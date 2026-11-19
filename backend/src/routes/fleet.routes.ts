@@ -33,13 +33,13 @@ export function createFleetRouter() {
   }));
   r.get('/'+route+'/:id/history',safe(async(req,res)=>{const a=req.auth!,id=uuid.parse(req.params.id);const rows=await withTransaction(async c=>{await vehicle(c,a,id);return (await c.query(`SELECT id,'ASSIGNMENT' kind,status,starts_at::text date FROM vehicle_assignments WHERE vehicle_id=$1 UNION ALL SELECT id,'MAINTENANCE',status,scheduled_date::text FROM maintenance_records WHERE vehicle_id=$1 ORDER BY date DESC`,[id])).rows;});res.json(ApiResponse.success({rows}));}));
  }
- r.get('/driver-accounts',permit('fleet.drivers.manage'),safe(async(req,res)=>res.json(ApiResponse.success({rows:(await pool.query(`SELECT id,full_name,email FROM users WHERE organization_id=$1 AND role='DRIVER' AND is_active ORDER BY full_name`,[req.auth!.organizationId])).rows}))));
+ r.get('/driver-accounts',permit('fleet.drivers.manage'),safe(async(req,res)=>res.json(ApiResponse.success({rows:(await pool.query(`SELECT id,full_name,email FROM users WHERE organization_id=$1 AND role IN ('DRIVER','DRIVER_OPERATOR') AND is_active ORDER BY full_name`,[req.auth!.organizationId])).rows}))));
  r.get('/drivers',safe(async(req,res)=>res.json(ApiResponse.success({rows:(await pool.query(`SELECT d.*,u.email login_email FROM fleet_drivers d LEFT JOIN users u ON u.id=d.user_id WHERE d.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_project_access g WHERE g.project_id=d.project_id AND g.user_id=$3)) ORDER BY name`,orgParams(req.auth!))).rows}))));
  for(const method of ['post','patch'] as const) r[method]('/drivers'+(method==='patch'?'/:id':''),permit('fleet.drivers.manage'),safe(async(req,res)=>{
   const data=driverSchema.parse(req.body),a=req.auth!,id=method==='patch'?uuid.parse(req.params.id):undefined;
   const row=await withTransaction(async c=>{
    await project(c,a,data.project_id);
-   if(data.user_id&&!(await c.query(`SELECT id FROM users WHERE id=$1 AND organization_id=$2 AND role='DRIVER' AND is_active`,[data.user_id,a.organizationId])).rowCount) fail('The login account must be an active Driver account in your organization.',400);
+   if(data.user_id&&!(await c.query(`SELECT id FROM users WHERE id=$1 AND organization_id=$2 AND role IN ('DRIVER','DRIVER_OPERATOR') AND is_active`,[data.user_id,a.organizationId])).rowCount) fail('The login account must be an active Driver account in your organization.',400);
    if(id) {const d=(await c.query('SELECT * FROM fleet_drivers WHERE id=$1 AND organization_id=$2 FOR UPDATE',[id,a.organizationId])).rows[0];if(!d) fail('Driver access denied.',403);await project(c,a,d.project_id);
     const active=await c.query("SELECT id FROM vehicle_assignments WHERE driver_id=$1 AND status='SCHEDULED'",[id]);if(active.rowCount&&(data.status!=='AVAILABLE'||d.project_id!==data.project_id||data.license_expiry<d.license_expiry)) fail('Complete or cancel assignments before restricting the driver.');
    }

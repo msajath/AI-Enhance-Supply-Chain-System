@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ApiError } from './apiError';
 import { apiClient } from './api';
 
 // Read-only project & site API (Jira AESCS-42). Scope is decided by the server.
@@ -53,6 +54,7 @@ export async function fetchSites(projectId?: string, signal?: AbortSignal): Prom
 
 /** Maps API failures to short, safe messages. Never shows server details. */
 export function loadErrorMessage(error: unknown, what: string): string {
+  if (error instanceof ApiError) return error.message;
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
     if (status === 401) return 'Your session has expired. Please sign in again.';
@@ -63,4 +65,4 @@ export function loadErrorMessage(error: unknown, what: string): string {
   return `We couldn't load ${what} right now. Please try again.`;
 }
 
-export const isCanceled = (error: unknown) => axios.isCancel(error) || (error as { name?: string })?.name === 'CanceledError';
+export const isCanceled = (error: unknown) => (error instanceof ApiError && error.kind==='canceled') || axios.isCancel(error) || (error as { name?: string })?.name === 'CanceledError';

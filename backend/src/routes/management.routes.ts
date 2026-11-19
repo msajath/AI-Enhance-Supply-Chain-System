@@ -8,11 +8,11 @@ import { requireAuth } from '../middleware/authenticate';
 import { createAdminRouter } from './admin.routes';
 import { createFleetRouter } from './fleet.routes';
 import { createWarehouseRouter } from './warehouse.routes';
-import { safe,fail,audit,orgParams,projectScope,warehouseScope,text } from '../modules/management/shared';
-import { PERMISSIONS } from '../auth/permissions';
+import { safe,fail,audit,permit,orgParams,projectScope,warehouseScope,text } from '../modules/management/shared';
+import { PERMISSIONS, ROLES, DASHBOARD_PREFIX, ROLE_LABELS, hasPermission } from '../auth/permissions';
 export function createManagementRouter(sessionMiddleware:RequestHandler) {
  const r=Router();
- r.use(['/admin','/fleet','/warehouse','/driver','/context','/account'],sessionMiddleware,requireAuth,(_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
+ r.use(['/admin','/fleet','/warehouse','/context','/account','/review',...ROLES.map(role => '/' + DASHBOARD_PREFIX[role])],sessionMiddleware,requireAuth,(_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
  r.use((req,res,next)=>{
   if(!['GET','HEAD','OPTIONS'].includes(req.method)) {
    const origin=req.get('Origin');
@@ -23,9 +23,9 @@ export function createManagementRouter(sessionMiddleware:RequestHandler) {
  });
  r.get('/context',safe(async(req,res)=>{
   const a=req.auth!,params=orgParams(a);
-  const projects=(await pool.query(`SELECT p.* FROM projects p WHERE p.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_project_access g WHERE g.project_id=p.id AND g.user_id=$3)) ORDER BY name`,params)).rows;
-  const sites=(await pool.query(`SELECT s.* FROM sites s WHERE s.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_site_access g JOIN user_project_access p ON p.user_id=g.user_id AND p.project_id=s.project_id WHERE g.site_id=s.id AND g.user_id=$3)) ORDER BY name`,params)).rows;
-  const warehouses=(await pool.query(`SELECT w.* FROM warehouses w WHERE w.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_warehouse_access g WHERE g.warehouse_id=w.id AND g.user_id=$3)) AND (w.site_id IS NULL OR $2::boolean OR EXISTS(SELECT 1 FROM user_site_access sg JOIN sites si ON si.id=sg.site_id JOIN user_project_access pg ON pg.user_id=sg.user_id AND pg.project_id=si.project_id WHERE sg.site_id=w.site_id AND sg.user_id=$3)) ORDER BY name`,params)).rows;
+  const projects=hasPermission(a.role,'projects.read')?(await pool.query(`SELECT p.* FROM projects p WHERE p.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_project_access g WHERE g.project_id=p.id AND g.user_id=$3)) ORDER BY name`,params)).rows:[];
+  const sites=hasPermission(a.role,'projects.read')?(await pool.query(`SELECT s.* FROM sites s WHERE s.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_site_access g JOIN user_project_access p ON p.user_id=g.user_id AND p.project_id=s.project_id WHERE g.site_id=s.id AND g.user_id=$3)) ORDER BY name`,params)).rows:[];
+  const warehouses=(hasPermission(a.role,'warehouses.read')||hasPermission(a.role,'inventory.read'))?(await pool.query(`SELECT w.* FROM warehouses w WHERE w.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_warehouse_access g WHERE g.warehouse_id=w.id AND g.user_id=$3)) AND (w.site_id IS NULL OR $2::boolean OR EXISTS(SELECT 1 FROM user_site_access sg JOIN sites si ON si.id=sg.site_id JOIN user_project_access pg ON pg.user_id=sg.user_id AND pg.project_id=si.project_id WHERE sg.site_id=w.site_id AND sg.user_id=$3)) ORDER BY name`,params)).rows:[];
   const organization=(await pool.query('SELECT id,name,code,address FROM organizations WHERE id=$1',[a.organizationId])).rows[0];
   res.json(ApiResponse.success({projects,sites,warehouses,organization,permissions:PERMISSIONS[a.role]}));
  }));
@@ -35,7 +35,7 @@ export function createManagementRouter(sessionMiddleware:RequestHandler) {
    await c.query('UPDATE users SET full_name=$2,password_hash=coalesce($3,password_hash),auth_version=auth_version+1 WHERE id=$1',[a.userId,v.full_name,v.new_password?await hash(v.new_password,12):null]);await audit(c,a,'ACCOUNT_UPDATED',{});
   });res.json(ApiResponse.success(null,'Account updated. Sign in again.'));
  }));
- for(const [prefix,role] of [['admin','ADMIN'],['fleet','FLEET_MANAGER'],['warehouse','WAREHOUSE_MANAGER']] as const) r.get('/'+prefix+'/dashboard',safe(async(req,res)=>{
+ for(const [prefix,role] of [['admin','ADMIN'],['fleet','FLEET_MANAGER'],['warehouse','WAREHOUSE_MANAGER']] as const) r.get('/'+prefix+'/dashboard',permit('dashboard.'+prefix+'.read'),safe(async(req,res)=>{
   const a=req.auth!;if(a.role!==role) fail('Dashboard access denied.',403);const params=orgParams(a);let cards: {label:string;value:unknown}[]=[],activity:unknown[]=[],alerts:unknown[]=[];
   if(role==='ADMIN') {
    const totals=(await pool.query(`SELECT (SELECT count(*) FROM users WHERE organization_id=$1 AND is_active) users,(SELECT count(*) FROM projects WHERE organization_id=$1 AND status='ACTIVE') projects,(SELECT count(*) FROM access_requests WHERE organization_id=$1 AND status='PENDING') requests,(SELECT count(*) FROM users u WHERE organization_id=$1 AND is_active AND role<>'ADMIN' AND NOT EXISTS(SELECT 1 FROM user_project_access g WHERE g.user_id=u.id)) pending`,[a.organizationId])).rows[0];
@@ -60,11 +60,11 @@ export function createManagementRouter(sessionMiddleware:RequestHandler) {
  const driverAssignments=`SELECT a.id,v.vehicle_number,v.model,p.name project_name,s.name site_name,a.starts_at,a.ends_at,a.load_quantity,v.capacity_unit,a.status
    FROM vehicle_assignments a JOIN fleet_drivers d ON d.id=a.driver_id JOIN fleet_vehicles v ON v.id=a.vehicle_id JOIN projects p ON p.id=a.project_id LEFT JOIN sites s ON s.id=a.site_id
    WHERE d.user_id=$1 AND a.organization_id=$2`;
- const driverOnly:RequestHandler=(req,res,next)=>{if(req.auth?.role!=='DRIVER'){res.status(403).json(ApiResponse.error('Driver access only.','FORBIDDEN'));return;}next();};
- r.get('/driver/assignments',driverOnly,safe(async(req,res)=>{
+ const driverOnly:RequestHandler=(req,res,next)=>{if(!req.auth||!['DRIVER','DRIVER_OPERATOR'].includes(req.auth.role)){res.status(403).json(ApiResponse.error('Driver access only.','FORBIDDEN'));return;}next();};
+ r.get('/driver/assignments',permit('driver.assignments.read'),driverOnly,safe(async(req,res)=>{
   const a=req.auth!;res.json(ApiResponse.success({rows:(await pool.query(driverAssignments+' ORDER BY a.starts_at DESC LIMIT 500',[a.userId,a.organizationId])).rows}));
  }));
- r.get('/driver/dashboard',driverOnly,safe(async(req,res)=>{
+ r.get('/driver/dashboard',permit('dashboard.driver.read'),driverOnly,safe(async(req,res)=>{
   const a=req.auth!;
   const driver=(await pool.query('SELECT name,license_number,license_expiry,status FROM fleet_drivers WHERE user_id=$1 AND organization_id=$2',[a.userId,a.organizationId])).rows[0];
   const rows=(await pool.query(driverAssignments+' ORDER BY a.starts_at',[a.userId,a.organizationId])).rows;
@@ -75,6 +75,17 @@ export function createManagementRouter(sessionMiddleware:RequestHandler) {
   if(!driver) alerts.push({id:'link',notice:'Your login is not linked to a driver record yet. Ask your fleet manager to link it under Fleet > Drivers.'});
   else if(new Date(driver.license_expiry).getTime()-now<30*864e5) alerts.push({id:'licence',notice:'Your driving licence expires within 30 days. Renew it and tell your fleet manager.'});
   res.json(ApiResponse.success({cards,activity:upcoming.slice(0,8),alerts}));
+ }));
+ // New workspaces expose only implemented, scope-filtered read modules. No synthetic metrics.
+ for (const role of ROLES.filter(role => !['ADMIN','FLEET_MANAGER','WAREHOUSE_MANAGER','DRIVER','DRIVER_OPERATOR'].includes(role))) {
+  r.get('/'+DASHBOARD_PREFIX[role]+'/dashboard',permit('dashboard.'+DASHBOARD_PREFIX[role]+'.read'),safe(async(req,res)=>{
+   const a=req.auth!; if(a.role!==role) fail('Dashboard access denied.',403);
+   res.json(ApiResponse.success({cards:[],activity:[],alerts:[],workspace:ROLE_LABELS[role],modulesPending:true}));
+  }));
+ }
+ r.get('/review/audit',permit('audit.read'),safe(async(req,res)=>{
+  const rows=(await pool.query(`SELECT l.id,l.event_type,l.module,l.metadata,l.created_at,u.full_name actor FROM system_audit_logs l LEFT JOIN users u ON u.id=l.actor_id WHERE u.organization_id=$1::uuid OR l.metadata->>'organization_id'=$1::text ORDER BY l.created_at DESC LIMIT 1000`,[req.auth!.organizationId])).rows;
+  res.json(ApiResponse.success({rows}));
  }));
  r.use('/admin',createAdminRouter());r.use('/fleet',createFleetRouter());r.use('/warehouse',createWarehouseRouter());
  return r;

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { pool } from '../src/config/database';
+import { pool, withTransaction } from '../src/config/database';
 import { hasCompanyWideScope, isRole } from '../src/auth/permissions';
 import type { AuthContext } from '../src/middleware/authenticate';
 import {
@@ -50,10 +50,18 @@ describe.skipIf(!enabled)('project scope SQL against real PostgreSQL + seed data
   });
 
   afterAll(async () => {
-    await pool.query(`DELETE FROM projects WHERE organization_id = 'a0000000-0000-0000-0000-0000000000ee'`);
-    await pool.query(`DELETE FROM organizations WHERE code = 'SCOPE-TEST-OTHER'`);
-    await pool.query(`DELETE FROM system_audit_logs WHERE metadata->>'path' = '/integration-test'`);
-    await pool.end();
+    try {
+      await withTransaction(async client => {
+        const organizationId = 'a0000000-0000-0000-0000-0000000000ee';
+        await client.query('DELETE FROM projects WHERE organization_id = $1', [organizationId]);
+        // Migration 006 automatically seeds company-owned roles, even without users.
+        await client.query('DELETE FROM roles WHERE organization_id = $1', [organizationId]);
+        await client.query('DELETE FROM organizations WHERE id = $1 AND code = $2', [organizationId, 'SCOPE-TEST-OTHER']);
+        await client.query(`DELETE FROM system_audit_logs WHERE metadata->>'path' = '/integration-test'`);
+      });
+    } finally {
+      await pool.end();
+    }
   });
 
   it('admin sees both fixture-plan projects and both sites, company-wide', async () => {

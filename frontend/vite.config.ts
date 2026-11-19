@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
   return {
     define: { __DEMO_PASSWORDS__: JSON.stringify(demoPasswords) },
     plugins: [react()],
+    envDir: path.resolve(__dirname, '..'),
     server: {
       port: 5173,
       host: true,

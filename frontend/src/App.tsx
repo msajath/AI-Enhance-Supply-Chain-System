@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
-import { apiClient } from './services/api';
+import {roleCatalog} from './services/roles';
+import {expireSession,onSessionExpired,sessionGeneration,startSession} from './services/session';
 import { logout, restoreSession, type AuthUser } from './services/auth';
 import { read, write, errorMessage, emptyContext, type Context, type Row } from './services/management';
 import LoginPage from './pages/Login';
@@ -10,7 +11,7 @@ import { SiteIllustration } from './components/SiteIllustration';
 import { ManagedRoute, RolesPage, Modal, DataTable } from './pages/Management';
 import { ProjectsPage } from './pages/Projects';
 import { SitesPage } from './pages/Sites';
-import { nav, resources, rolePrefix } from './pages/managementConfig';
+import { nav, resources, rolePrefix, navigationPermission } from './pages/managementConfig';
 import './management.css';
 
 type Theme = 'light' | 'dark';
@@ -34,9 +35,9 @@ const iconFor = (path: string): IconName => ICONS[path.split('/').pop() ?? ''] ?
 const SPRINT1_PAGES: Record<string, NavEntry[]> = {
   warehouse: [{ path: '/warehouse/projects', label: 'Projects' }, { path: '/warehouse/sites', label: 'Sites' }],
 };
-function navFor(prefix: string): NavEntry[] {
+function navFor(prefix: string, user: AuthUser): NavEntry[] {
   const items = nav[prefix];
-  return [items[0], ...(SPRINT1_PAGES[prefix] ?? []), ...items.slice(1)];
+  return [items[0], ...(SPRINT1_PAGES[prefix] ?? []), ...items.slice(1)].filter(entry=>!user.permissions||user.permissions.includes(navigationPermission(entry.path)));
 }
 
 const INTRO: Record<string, string> = {
@@ -47,7 +48,7 @@ const INTRO: Record<string, string> = {
 };
 
 function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
-  const [data, setData] = useState<{ cards: { label: string; value: unknown }[]; activity: Row[]; alerts: Row[] } | null>(null);
+  const [data, setData] = useState<{ cards: { label: string; value: unknown }[]; activity: Row[]; alerts: Row[]; modulesPending?: boolean } | null>(null);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   useEffect(() => {
@@ -56,13 +57,13 @@ function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
     return () => { active = false; };
   }, [prefix, revision]);
   const columns = (rows: Row[]) => rows[0] ? Object.keys(rows[0]).filter((k) => k !== 'id') : [];
-  const firstTask = nav[prefix][1];
+  const firstTask = navFor(prefix, user)[1];
   return <>
     <section className="hero">
       <div className="hero-copy">
         <p className="hero-date">{today()}</p>
         <h1>{greeting()}, {user.full_name.split(' ')[0]}</h1>
-        <p>{INTRO[prefix]}{prefix !== 'driver' && ' Figures reflect only the projects and warehouses you can access.'}</p>
+        <p>{INTRO[prefix]??`Your ${user.role.toLowerCase()} workspace.`}{prefix !== 'driver' && ' Figures reflect only the projects and warehouses you can access.'}</p>
         <div className="hero-actions">
           {firstTask && <Link className="button button-primary" to={firstTask.path}><Icon name={iconFor(firstTask.path)} size={17}/>{firstTask.label}</Link>}
           <button type="button" className="button button-ghost" onClick={() => setRevision((v) => v + 1)}>Refresh</button>
@@ -71,15 +72,16 @@ function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
       <SiteIllustration className="compact"/>
     </section>
     {error ? <div role="alert" className="manage-error">{error}</div> : !data ? <p className="org-state" role="status">Loading overview...</p> : <>
+      {data.modulesPending&&<section className="panel"><h2>{user.role} workspace</h2><p>Business modules for this role are not yet available in this release. Available shared views appear in the navigation.</p></section>}
       {data.cards.length > 0 && <section className="figures" aria-label="Key figures" style={{ '--cols': Math.min(data.cards.length, 4) } as React.CSSProperties}>
         {data.cards.map((card) => <div className="figure" key={card.label}><span className="figure-title">{card.label}</span><strong className="figure-value">{String(card.value)}</strong><span className="figure-note">Live from the database</span></div>)}
       </section>}
-      <section className="overview-grid">
+      {!data.modulesPending&&<section className="overview-grid">
         <div className="panel"><div className="panel-heading"><div><h2>{prefix === 'driver' ? 'Upcoming trips' : 'Recent activity'}</h2><p>{prefix === 'driver' ? 'Your next scheduled trips' : 'The latest changes in your workspace'}</p></div></div><DataTable rows={data.activity} columns={columns(data.activity)}/></div>
         <div className="panel"><div className="panel-heading"><div><h2>{prefix === 'admin' ? 'Team by role' : prefix === 'driver' ? 'Notices' : 'Needs attention'}</h2><p>{prefix === 'fleet' ? 'Upcoming service and restricted assets' : prefix === 'warehouse' ? 'Quarantined stock' : prefix === 'driver' ? 'Licence and account reminders' : 'Active accounts per role'}</p></div></div><DataTable rows={data.alerts} columns={columns(data.alerts)}/></div>
-      </section>
+      </section>}
       <section className="panel quick-links"><div className="panel-heading"><div><h2>Continue your work</h2></div></div>
-        <div className="quick-links-row">{navFor(prefix).slice(1, 6).map((item) => <Link className="button button-outline" key={item.path} to={item.path}><Icon name={iconFor(item.path)} size={16}/>{item.label}</Link>)}</div>
+        <div className="quick-links-row">{navFor(prefix, user).slice(1, 6).map((item) => <Link className="button button-outline" key={item.path} to={item.path}><Icon name={iconFor(item.path)} size={16}/>{item.label}</Link>)}</div>
       </section>
     </>}
   </>;
@@ -90,7 +92,7 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   const location = useLocation();
   const navigate = useNavigate();
   const key = location.pathname.slice(1);
-  const items = navFor(prefix);
+  const items = navFor(prefix, user);
   const activeIndex = items.findIndex((i) => i.path === location.pathname);
   const item = items[activeIndex];
   const [context, setContext] = useState<Context>(emptyContext);
@@ -121,7 +123,8 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   }, [prefix, location.pathname, revision]);
   const initials = user.full_name.split(' ').map((p) => p[0]).join('').slice(0, 2);
   const signOut = async () => { if (busy) return; setBusy(true); setError(''); try { await onLogout(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); } };
-  const scopes = prefix === 'warehouse' ? context.warehouses : context.projects;
+  const warehouseView=prefix==='warehouse'||resources[key]?.path.startsWith('warehouse/');
+  const scopes = warehouseView ? context.warehouses : context.projects;
   const accountSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (busy) return;
     const form = new FormData(event.currentTarget); setBusy(true); setError('');
@@ -138,7 +141,7 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   else if (key === 'admin/roles') page = <RolesPage/>;
   else if (key === 'warehouse/projects') page = <ProjectsPage onViewSites={(projectId) => navigate('/warehouse/sites', { state: { projectId } })}/>;
   else if (key === 'warehouse/sites') page = <SitesPage key={sitesProject} initialProjectId={sitesProject}/>;
-  else if (resources[key]) page = <ManagedRoute path={key} context={context} onChanged={() => setRevision((v) => v + 1)} scope={scope}/>;
+  else if (resources[key] && items.some(entry=>entry.path===location.pathname)) page = <ManagedRoute path={key} context={context} onChanged={() => setRevision((v) => v + 1)} scope={scope}/>;
   else page = <div className="org-state"><div><strong>Page not found</strong><p><Link to={'/' + prefix + '/dashboard'}>Return to overview</Link></p></div></div>;
 
   return <div className={`app-shell management-app ${theme === 'dark' ? 'theme-dark' : ''}`}>
@@ -166,8 +169,8 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
         <button className="mobile-menu icon-button" aria-label="Open menu" onClick={() => setMenu(true)}><Icon name="menu"/></button>
         <span className="topbar-crumbs"><span>{user.role}</span><strong>{item?.label ?? 'Page'}</strong></span>
         <div className="top-actions">
-          {prefix !== 'driver' && <label className="filter-select scope-select"><Icon name="filter" size={15}/><span className="visually-hidden">{prefix === 'warehouse' ? 'Warehouse' : 'Project'}</span>
-            <select aria-label="Project or warehouse filter" value={scope} onChange={(e) => setScope(e.target.value)}><option value="">All my {prefix === 'warehouse' ? 'warehouses' : 'projects'}</option>{scopes.map((s) => <option key={s.id} value={s.id}>{String(s.name)}</option>)}</select>
+          {prefix !== 'driver' && <label className="filter-select scope-select"><Icon name="filter" size={15}/><span className="visually-hidden">{warehouseView ? 'Warehouse' : 'Project'}</span>
+            <select aria-label="Project or warehouse filter" value={scope} onChange={(e) => setScope(e.target.value)}><option value="">All my {warehouseView ? 'warehouses' : 'projects'}</option>{scopes.map((s) => <option key={s.id} value={s.id}>{String(s.name)}</option>)}</select>
           </label>}
           <span className="role-badge">{user.role}</span>
           <button className="icon-button theme-toggle" aria-label={themeLabel} title={themeLabel} onClick={toggleTheme}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={17}/></button>
@@ -194,47 +197,19 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
 }
 
 function Application() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [restoring, setRestoring] = useState(true);
-  const [sessionError, setSessionError] = useState('');
-  const [email, setEmail] = useState('');
-  const [theme, setTheme] = useState<Theme>(() => localStorage.getItem('qorvenz-theme') === 'dark' ? 'dark' : 'light');
-  const toggleTheme = () => setTheme((t) => { const next = t === 'light' ? 'dark' : 'light'; localStorage.setItem('qorvenz-theme', next); return next; });
-  const expire = () => { setUser(null); setSessionError('Your session has expired. Please sign in again.'); };
-  useEffect(() => {
-    let active = true;
-    restoreSession().then((u) => { if (active) setUser(u); }).catch(() => { if (active) setSessionError('Unable to restore your session. Please sign in again.'); }).finally(() => { if (active) setRestoring(false); });
-    return () => { active = false; };
-  }, []);
-  useEffect(() => {
-    const id = apiClient.interceptors.response.use((r) => r, (e) => { if (e.response?.status === 401 && !String(e.config?.url).includes('/auth/')) expire(); return Promise.reject(e); });
-    return () => apiClient.interceptors.response.eject(id);
-  }, []);
-  const userId = user?.id;
-  useEffect(() => {
-    if (!userId) return;
-    const check = () => { restoreSession().then((u) => { if (!u) expire(); else setUser(u); }).catch(() => { /* keep data visible during a temporary connection failure */ }); };
-    const timer = window.setInterval(check, 60000);
-    window.addEventListener('focus', check);
-    return () => { window.clearInterval(timer); window.removeEventListener('focus', check); };
-  }, [userId]);
-  const signIn = (u: AuthUser) => { setSessionError(''); setUser(u); };
-  const onLogout = async () => { await logout(); setUser(null); setEmail(''); };
-  if (restoring) return <main className={`login-page restoring ${theme === 'dark' ? 'theme-dark' : ''}`}><p role="status">Restoring your session...</p></main>;
-  const home = user ? '/' + rolePrefix(user.role) + '/dashboard' : '/login';
-  const protectedRole = (role: AuthUser['role']) => !user ? <Navigate to="/login" replace/>
-    : user.role !== role ? <main className={`access-denied ${theme === 'dark' ? 'theme-dark' : ''}`}><Brand/><h1>Access denied</h1><p>Your account is not authorized for this workspace.</p><Link className="button button-primary" to={home}>Return to your dashboard</Link></main>
-    : <Shell user={user} theme={theme} toggleTheme={toggleTheme} onLogout={onLogout} onExpired={expire}/>;
-  return <Routes>
-    <Route path="/login" element={user ? <Navigate to={home} replace/> : <LoginPage onSignIn={signIn} sessionError={sessionError} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>}/>
-    <Route path="/admin/*" element={protectedRole('Admin')}/>
-    <Route path="/fleet/*" element={protectedRole('Fleet manager')}/>
-    <Route path="/warehouse/*" element={protectedRole('Warehouse manager')}/>
-    <Route path="/driver/*" element={protectedRole('Driver')}/>
-    <Route path="*" element={<Navigate to={home} replace/>}/>
-  </Routes>;
+ const [user,setUser]=useState<AuthUser|null>(null),[restoring,setRestoring]=useState(true),[sessionError,setSessionError]=useState(''),[email,setEmail]=useState('');
+ const [theme,setTheme]=useState<Theme>(()=>localStorage.getItem('qorvenz-theme')==='dark'?'dark':'light');
+ const toggleTheme=()=>setTheme(t=>{const next=t==='light'?'dark':'light';localStorage.setItem('qorvenz-theme',next);return next;});
+ const expire=()=>expireSession();
+ useEffect(()=>{let active=true;const generation=sessionGeneration();restoreSession().then(u=>{if(active&&generation===sessionGeneration()){if(u)startSession();setUser(u);}}).catch(()=>{if(active)setSessionError('Unable to restore your session. Please sign in again.');}).finally(()=>{if(active)setRestoring(false);});return()=>{active=false;};},[]);
+ useEffect(()=>onSessionExpired(()=>{setUser(null);setSessionError('Your session has expired. Please sign in again.');}),[]);
+ const userId=user?.id;
+ useEffect(()=>{if(!userId)return;const check=()=>{const generation=sessionGeneration();restoreSession().then(u=>{if(generation!==sessionGeneration())return;if(!u)expireSession(generation);else setUser(u);}).catch(()=>{/* Existing data remains visible during a temporary connection failure. */});};const timer=window.setInterval(check,60000);window.addEventListener('focus',check);return()=>{window.clearInterval(timer);window.removeEventListener('focus',check);};},[userId]);
+ const signIn=(u:AuthUser)=>{setSessionError('');setUser(u);};
+ const onLogout=async()=>{await logout();setUser(null);setEmail('');};
+ if(restoring)return <main className="login-page"><p role="status">Restoring your session...</p></main>;
+ const home=user?'/'+rolePrefix(user.role)+'/dashboard':'/login';
+ const protectedRole=(role:AuthUser['role'])=>!user?<Navigate to="/login" replace/>:(rolePrefix(user.role)!==rolePrefix(role) || user.permissions && !user.permissions.includes('dashboard.'+rolePrefix(role)+'.read'))?<main className="access-denied"><h1>Access Denied</h1><p>Your account is not authorized for this workspace.</p><Link className="button button-primary" to={home}>Return to your dashboard</Link></main>:<Shell user={user} theme={theme} toggleTheme={toggleTheme} onLogout={onLogout} onExpired={expire}/>;
+ return <Routes><Route path="/login" element={user?<Navigate to={home} replace/>:<LoginPage onSignIn={signIn} sessionError={sessionError} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>}/>{Array.from(new Map(roleCatalog.map(role=>[role.prefix,role])).values()).map(role=><Route key={role.code} path={'/'+role.prefix+'/*'} element={protectedRole(role.label)}/>)}<Route path="*" element={<Navigate to={home} replace/>}/></Routes>;
 }
-
-export default function App() {
-  return <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><Application/></BrowserRouter>;
-}
+export default function App() {return <BrowserRouter future={{v7_startTransition:true,v7_relativeSplatPath:true}}><Application/></BrowserRouter>;}
