@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { fetchProjects, isCanceled, loadErrorMessage, type Project, type Scope } from '../services/organization';
 import { EmptyState, ErrorState, LoadingRows, SearchIcon, StatusPill } from './orgShared';
 import { formatDate, scheduleProgress } from './format';
+import { ProjectFormModal } from './ProjectForm';
 
 /**
- * Projects page (Jira AESCS-42 / AESCS-162, Member 3).
+ * Projects page (Jira AESCS-42 / AESCS-162 / AESCS-44, Member 3).
  * Read-only list of the projects the server says this user may see, with
- * loading, empty, error and "no search match" states.
+ * loading, empty, error and "no search match" states, plus project creation modal
+ * for authorized managers.
  */
 
 type State =
@@ -14,10 +16,11 @@ type State =
   | { status: 'error'; message: string }
   | { status: 'ready'; projects: Project[]; scope: Scope };
 
-export function ProjectsPage({ onViewSites }: { onViewSites: (projectId: string) => void }) {
+export function ProjectsPage({ onViewSites, canCreate = false }: { onViewSites: (projectId: string) => void; canCreate?: boolean }) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -44,7 +47,23 @@ export function ProjectsPage({ onViewSites }: { onViewSites: (projectId: string)
         <h1>Projects</h1>
         <p>{scopeText}</p>
       </div>
+      {canCreate && (
+        <button
+          type="button"
+          className="button button-primary"
+          onClick={() => setShowCreateModal(true)}
+          aria-label="Create new project"
+        >
+          + New Project
+        </button>
+      )}
     </div>
+    {showCreateModal && (
+      <ProjectFormModal
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => setAttempt((n) => n + 1)}
+      />
+    )}
     <section className="panel org-panel" aria-busy={state.status === 'loading'} aria-labelledby="projects-title">
       <div className="panel-heading">
         <div>

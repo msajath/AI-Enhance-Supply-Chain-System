@@ -34,10 +34,10 @@ export const resources:Record<string,Resource>={
  'warehouse/movements':{title:'Movement history',description:'Append-only transaction history. Counts and adjustments record before/after quantities and the actor.',path:'warehouse/movements',fields:[],columns:['material_name','warehouse_name','kind','reference','quantity_change','quarantine_change','before_quantity','after_quantity','actor','created_at']},
 };
 export const nav:Record<string,{path:string;label:string}[]>={
- admin:[['dashboard','Overview'],['users','Users'],['requests','Access requests'],['roles','Roles & Permissions'],['projects','Projects'],['sites','Sites'],['warehouses','Warehouses'],['audit','Audit Logs'],['settings','Settings']].map(([p,label])=>({path:'/admin/'+p,label})),
+ admin:[['dashboard','Overview'],['users','Users'],['requests','Access requests'],['roles','Roles & Permissions'],['projects','Projects'],['sites','Sites'],['warehouses','Warehouses'],['materials','Materials Catalog'],['suppliers','Suppliers'],['requisitions','Requisitions & Approvals'],['audit','Audit Logs'],['settings','Settings']].map(([p,label])=>({path:'/admin/'+p,label})),
  fleet:[['dashboard','Fleet Overview'],['vehicles','Vehicles'],['drivers','Drivers'],['assignments','Assignments'],['equipment','Equipment'],['maintenance','Maintenance'],['fuel','Fuel Records'],['reports','Fleet Reports']].map(([p,label])=>({path:'/fleet/'+p,label})),
  driver:[['dashboard','My Day'],['assignments','My Trips']].map(([p,label])=>({path:'/driver/'+p,label})),
- warehouse:[['dashboard','Warehouse Overview'],['inventory','Inventory'],['materials','Material Master'],['receipts','Goods Receiving'],['issues','Stock Issues'],['transfers','Stock Transfers'],['counts','Stock Counts'],['adjustments','Stock Adjustments'],['returns','Returns & Damage'],['reports','Stock Reports'],['movements','Movement History']].map(([p,label])=>({path:'/warehouse/'+p,label})),
+ warehouse:[['dashboard','Warehouse Overview'],['inventory','Inventory'],['materials','Materials Catalog'],['suppliers','Suppliers'],['requisitions','Requisitions & Approvals'],['receipts','Goods Receiving'],['issues','Stock Issues'],['transfers','Stock Transfers'],['counts','Stock Counts'],['adjustments','Stock Adjustments'],['returns','Returns & Damage'],['reports','Stock Reports'],['movements','Movement History']].map(([p,label])=>({path:'/warehouse/'+p,label})),
 };
 export function rolePrefix(role:string) { return roleCatalog.find(entry=>entry.label===role)?.prefix ?? 'unassigned'; }
 
@@ -59,6 +59,9 @@ export function navigationPermission(path:string):string {
  const [prefix,page]=path.slice(1).split('/');
  if(page==='assignments'&&prefix==='driver')return 'driver.assignments.read';
  if(['projects','sites'].includes(page)&&prefix==='warehouse')return 'projects.read';
+ if(page==='materials')return 'inventory.read';
+ if(page==='suppliers')return prefix==='admin'?'users.read':'inventory.read';
+ if(page==='requisitions')return prefix==='admin'?'users.read':'inventory.read';
  if(page==='dashboard')return 'dashboard.'+prefix+'.read';
  if(page==='audit')return 'audit.read';
  if(page==='warehouse-inventory'||page==='warehouse-movements')return 'inventory.read';

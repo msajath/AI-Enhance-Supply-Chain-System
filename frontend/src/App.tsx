@@ -12,6 +12,10 @@ import { SiteIllustration } from './components/SiteIllustration';
 import { ManagedRoute, RolesPage, Modal, DataTable } from './pages/Management';
 import { ProjectsPage } from './pages/Projects';
 import { SitesPage } from './pages/Sites';
+import ProjectManagementPage from './pages/ProjectForm';
+import { MaterialsPage } from './pages/Materials';
+import { SuppliersPage } from './pages/Suppliers';
+import { RequisitionsPage } from './pages/Requisitions';
 import { nav, resources, rolePrefix, navigationPermission } from './pages/managementConfig';
 import './management.css';
 
@@ -140,8 +144,12 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   let page;
   if (key === prefix + '/dashboard') page = <Dashboard prefix={prefix} user={user}/>;
   else if (key === 'admin/roles') page = <RolesPage/>;
-  else if (key === 'warehouse/projects') page = <ProjectsPage onViewSites={(projectId) => navigate('/warehouse/sites', { state: { projectId } })}/>;
-  else if (key === 'warehouse/sites') page = <SitesPage key={sitesProject} initialProjectId={sitesProject}/>;
+  else if (key === 'warehouse/projects') page = <ProjectsPage onViewSites={(projectId) => navigate('/warehouse/sites', { state: { projectId } })} canCreate={user.permissions?.includes('projects.manage') ?? (prefix === 'admin')}/>;
+  else if (key === 'warehouse/sites') page = <SitesPage key={sitesProject} initialProjectId={sitesProject} canCreate={user.permissions?.includes('sites.manage') ?? (prefix === 'admin')}/>;
+  else if (key === 'admin/projects/new' || key === 'projects/new') page = <ProjectManagementPage/>;
+  else if (key === 'warehouse/materials' || key === 'admin/materials') page = <MaterialsPage canRegister={user.permissions?.includes('inventory.receive') ?? (prefix === 'admin' || prefix === 'warehouse')}/>;
+  else if (key === 'warehouse/suppliers' || key === 'admin/suppliers') page = <SuppliersPage canViewPricing={user.permissions?.includes('procurement.pricing.read') ?? (prefix === 'admin' || prefix === 'warehouse')}/>;
+  else if (key === 'warehouse/requisitions' || key === 'admin/requisitions') page = <RequisitionsPage isApprover={prefix === 'admin' || prefix === 'warehouse'}/>;
   else if (resources[key] && items.some(entry=>entry.path===location.pathname)) page = <ManagedRoute path={key} context={context} onChanged={() => setRevision((v) => v + 1)} scope={scope}/>;
   else page = <div className="org-state"><div><strong>Page not found</strong><p><Link to={'/' + prefix + '/dashboard'}>Return to overview</Link></p></div></div>;
 

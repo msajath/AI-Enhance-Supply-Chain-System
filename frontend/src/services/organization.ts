@@ -52,6 +52,67 @@ export async function fetchSites(projectId?: string, signal?: AbortSignal): Prom
   return unwrap(response.data, 'sites');
 }
 
+export interface CreateProjectInput {
+  code: string;
+  name: string;
+  status: 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface CreateSiteInput {
+  project_id: string;
+  code: string;
+  name: string;
+  address?: string | null;
+  status: 'ACTIVE' | 'INACTIVE' | 'CLOSED';
+}
+
+export function normalizeProject(raw: Record<string, unknown>): Project {
+  return {
+    id: String(raw.id ?? ''),
+    code: String(raw.code ?? ''),
+    name: String(raw.name ?? ''),
+    status: String(raw.status ?? 'ACTIVE'),
+    startDate: (raw.startDate ?? raw.start_date ?? null) as string | null,
+    endDate: (raw.endDate ?? raw.end_date ?? null) as string | null,
+    siteCount: typeof raw.siteCount === 'number' ? raw.siteCount : typeof raw.site_count === 'number' ? Number(raw.site_count) : 0,
+  };
+}
+
+export function normalizeSite(raw: Record<string, unknown>): Site {
+  return {
+    id: String(raw.id ?? ''),
+    projectId: String(raw.projectId ?? raw.project_id ?? ''),
+    projectCode: String(raw.projectCode ?? raw.project_code ?? ''),
+    projectName: String(raw.projectName ?? raw.project_name ?? ''),
+    code: String(raw.code ?? ''),
+    name: String(raw.name ?? ''),
+    address: (raw.address ?? null) as string | null,
+    status: String(raw.status ?? 'ACTIVE'),
+  };
+}
+
+export async function createProject(data: CreateProjectInput): Promise<Project> {
+  const response = await apiClient.post<{ success: boolean; data: { row: Record<string, unknown> } }>('/api/v1/admin/projects', data, { withCredentials: true });
+  return normalizeProject(response.data.data.row);
+}
+
+export async function updateProject(id: string, data: Partial<CreateProjectInput>): Promise<Project> {
+  const response = await apiClient.patch<{ success: boolean; data: { row: Record<string, unknown> } }>(`/api/v1/admin/projects/${id}`, data, { withCredentials: true });
+  return normalizeProject(response.data.data.row);
+}
+
+export async function createSite(data: CreateSiteInput): Promise<Site> {
+  const response = await apiClient.post<{ success: boolean; data: { row: Record<string, unknown> } }>('/api/v1/admin/sites', data, { withCredentials: true });
+  return normalizeSite(response.data.data.row);
+}
+
+export async function updateSite(id: string, data: Partial<CreateSiteInput>): Promise<Site> {
+  const response = await apiClient.patch<{ success: boolean; data: { row: Record<string, unknown> } }>(`/api/v1/admin/sites/${id}`, data, { withCredentials: true });
+  return normalizeSite(response.data.data.row);
+}
+
 /** Maps API failures to short, safe messages. Never shows server details. */
 export function loadErrorMessage(error: unknown, what: string): string {
   if (error instanceof ApiError) return error.message;
