@@ -18,7 +18,7 @@ This review does not implement new business APIs, database tables or AI services
 
 1. Qorvenz Tech Software Project Requirements Specification, particularly sections 2–5, 7–9 and 11.
 2. The approved seven-page QORVENZ TECH Connected ERD (64 tables, 132 foreign keys).
-3. `docs/architecture/erd.pdf`, subject to comparison with the approved uploaded ERD.
+3. `docs/architecture/erd.pdf` — verified against the approved seven-page connected ERD on 21 November 2026. All seven pages contain identical database diagrams and relationships. The PDF hashes differ due to file metadata.
 4. `docs/architecture/ai-permissions-and-safe-tools.md`.
 5. `docs/architecture/ai-evidence-and-review-data.md`.
 6. `docs/decision-log.md`.
