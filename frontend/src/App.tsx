@@ -1,3 +1,4 @@
+import RecoveryPage from './pages/Recovery';
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import {roleCatalog} from './services/roles';
@@ -210,6 +211,6 @@ function Application() {
  if(restoring)return <main className="login-page"><p role="status">Restoring your session...</p></main>;
  const home=user?'/'+rolePrefix(user.role)+'/dashboard':'/login';
  const protectedRole=(role:AuthUser['role'])=>!user?<Navigate to="/login" replace/>:(rolePrefix(user.role)!==rolePrefix(role) || user.permissions && !user.permissions.includes('dashboard.'+rolePrefix(role)+'.read'))?<main className="access-denied"><h1>Access Denied</h1><p>Your account is not authorized for this workspace.</p><Link className="button button-primary" to={home}>Return to your dashboard</Link></main>:<Shell user={user} theme={theme} toggleTheme={toggleTheme} onLogout={onLogout} onExpired={expire}/>;
- return <Routes><Route path="/login" element={user?<Navigate to={home} replace/>:<LoginPage onSignIn={signIn} sessionError={sessionError} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>}/>{Array.from(new Map(roleCatalog.map(role=>[role.prefix,role])).values()).map(role=><Route key={role.code} path={'/'+role.prefix+'/*'} element={protectedRole(role.label)}/>)}<Route path="*" element={<Navigate to={home} replace/>}/></Routes>;
+ return <Routes><Route path="/forgot-password" element={<RecoveryPage theme={theme} toggleTheme={toggleTheme}/>}/><Route path="/reset-password" element={<RecoveryPage reset theme={theme} toggleTheme={toggleTheme}/>}/><Route path="/login" element={user?<Navigate to={home} replace/>:<LoginPage onSignIn={signIn} sessionError={sessionError} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>}/>{Array.from(new Map(roleCatalog.map(role=>[role.prefix,role])).values()).map(role=><Route key={role.code} path={'/'+role.prefix+'/*'} element={protectedRole(role.label)}/>)}<Route path="*" element={<Navigate to={home} replace/>}/></Routes>;
 }
 export default function App() {return <BrowserRouter future={{v7_startTransition:true,v7_relativeSplatPath:true}}><Application/></BrowserRouter>;}

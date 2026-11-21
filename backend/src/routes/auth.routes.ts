@@ -1,3 +1,4 @@
+import { createPasswordResetRouter } from '../modules/auth/password-reset';
 import { Router } from 'express';
 import type session from 'express-session';
 import { compare, hash, hashSync } from 'bcryptjs';
@@ -83,6 +84,7 @@ export function createAuthRouter(store?: session.Store) {
     }
     next();
   });
+  router.use(createPasswordResetRouter());
   router.post('/login', rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false, message: ApiResponse.error('Too many sign-in attempts. Please try again later.', 'RATE_LIMITED') }), async (req, res) => {
     const parsed = credentialsSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json(ApiResponse.error('Enter a valid email and password.', 'INVALID_INPUT')); return; }

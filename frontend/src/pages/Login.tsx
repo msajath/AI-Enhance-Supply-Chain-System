@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { login, loginErrorMessage, requestAccess, requestErrorMessage, type AuthUser, type RequestedRole } from '../services/auth';
 import { Brand } from '../components/Brand';
@@ -37,7 +38,6 @@ const DEMO_ACCOUNTS = DEMO_PASSWORDS ? [
 export default function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme }: { onSignIn: (user: AuthUser) => void; sessionError: string; email: string; setEmail: (value: string) => void; theme: Theme; toggleTheme: () => void }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showResetHelp, setShowResetHelp] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [errors, setErrors] = useState({ email: '', password: '' });
@@ -115,13 +115,12 @@ export default function LoginPage({ onSignIn, sessionError, email, setEmail, the
       <div className="field">
         <div className="field-row">
           <label htmlFor="login-password">Password</label>
-          <button type="button" className="link-button" onClick={() => setShowResetHelp((v) => !v)} aria-expanded={showResetHelp}>Forgot password?</button>
+          <Link className="link-button" to="/forgot-password">Forgot password?</Link>
         </div>
         <div className="input-with-action">
           <input id="login-password" aria-invalid={!!errors.password} aria-describedby={errors.password ? 'password-error' : undefined} disabled={loading} type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)}/>
           <button type="button" className="input-action" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button>
         </div>
-        {showResetHelp && <p className="field-hint">Ask your workspace administrator to reset it for you.</p>}
         {errors.password && <p id="password-error" className="field-error" role="alert">{errors.password}</p>}
       </div>
       {loginError && <div className="form-error" role="alert">{loginError}</div>}
