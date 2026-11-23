@@ -8,7 +8,8 @@ import LoginPage from './pages/Login';
 import Icon from './components/Icon';
 import { Brand } from './components/Brand';
 import { SiteIllustration } from './components/SiteIllustration';
-import { ManagedRoute, RolesPage, Modal, DataTable } from './pages/Management';
+import { ManagedRoute, Modal, DataTable } from './pages/Management';
+import { AdminRolesPage } from './pages/AdminRoles';
 import { ProjectsPage } from './pages/Projects';
 import { SitesPage } from './pages/Sites';
 import { nav, resources, rolePrefix, navigationPermission } from './pages/managementConfig';
@@ -139,7 +140,17 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
 
   let page;
   if (key === prefix + '/dashboard') page = <Dashboard prefix={prefix} user={user}/>;
-  else if (key === 'admin/roles') page = <RolesPage/>;
+  else if (
+  key === 'admin/roles' &&
+  items.some((entry) => entry.path === location.pathname)
+) {
+  page = (
+    <AdminRolesPage
+      currentUserId={user.id}
+      canUpdate={user.permissions?.includes('users.update') ?? false}
+    />
+  );
+}
   else if (
   key === 'admin/organizations' &&
   items.some((entry) => entry.path === location.pathname)
