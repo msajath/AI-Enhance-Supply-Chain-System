@@ -3,6 +3,7 @@ import type session from 'express-session';
 import { compare, hash, hashSync } from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
+import { invalidFields } from '../middleware/validationError';
 import { randomBytes } from 'crypto';
 import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
 import { pool } from '../config/database';
@@ -85,7 +86,7 @@ export function createAuthRouter(store?: session.Store) {
   });
   router.post('/login', rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false, message: ApiResponse.error('Too many sign-in attempts. Please try again later.', 'RATE_LIMITED') }), async (req, res) => {
     const parsed = credentialsSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json(ApiResponse.error('Enter a valid email and password.', 'INVALID_INPUT')); return; }
+    if (!parsed.success) { res.status(400).json(invalidFields(parsed.error, 'Enter a valid email and password.')); return; }
     try {
       const result = await pool.query('SELECT id, email, password_hash, full_name, role, is_active, auth_version FROM users WHERE lower(email) = lower($1) LIMIT 1', [parsed.data.email]);
       const row = result.rows[0];
@@ -122,7 +123,7 @@ export function createAuthRouter(store?: session.Store) {
   // being used to test many emails.
   router.post('/access-requests', rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false, message: ApiResponse.error('Too many requests. Please try again in 15 minutes.', 'RATE_LIMITED') }), async (req, res) => {
     const parsed = accessRequestSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json(ApiResponse.error('Check your name, email, company code, role and password (at least 12 characters).', 'INVALID_INPUT')); return; }
+    if (!parsed.success) { res.status(400).json(invalidFields(parsed.error, 'Check your name, email, company code, role and password (at least 12 characters).')); return; }
     const v = parsed.data;
     try {
       const org = (await pool.query('SELECT id FROM organizations WHERE upper(code) = upper($1) LIMIT 1', [v.organizationCode])).rows[0];

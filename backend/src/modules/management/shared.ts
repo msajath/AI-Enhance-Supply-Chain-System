@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import type { Request, RequestHandler } from 'express';
 import { z } from 'zod';
+import { invalidFields } from '../../middleware/validationError';
 import { ApiResponse, AppError } from '../../utils/apiResponse';
 import { hasPermission } from '../../auth/permissions';
 import { recordAccessDenied } from '../../middleware/authorize';
@@ -11,11 +12,15 @@ export const amount = z.number().finite().min(0).max(999999999).multipleOf(0.001
 export const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>!Number.isNaN(Date.parse(v)),'Invalid date');
 export const stamp = z.string().datetime({offset:true});
 export const optionalId = uuid.nullable().optional();
-export const fail = (message: string, status=409): never => { throw new AppError(message,status,status===403?'FORBIDDEN':'BUSINESS_RULE'); };
+export function fail(message: string, status = 409, field = 'body'): never {
+  const code = status === 403 ? 'FORBIDDEN' : 'BUSINESS_RULE';
+  const details = status === 400 ? [{ field, message }] : undefined;
+  throw new AppError(message, status, code, details);
+}
 export const safe = (handler: (req: Request, res: Parameters<RequestHandler>[1])=>Promise<unknown>): RequestHandler => async(req,res)=>{
  try { await handler(req,res); } catch(error) {
-  if(error instanceof z.ZodError) { res.status(400).json(ApiResponse.error(error.issues.map(i=>`${i.path.join('.')}: ${i.message}`).join('; '),'INVALID_INPUT')); return; }
-  if(error instanceof AppError) { res.status(error.statusCode).json(ApiResponse.error(error.message,error.errorCode)); return; }
+  if(error instanceof z.ZodError) { res.status(400).json(invalidFields(error)); return; }
+  if(error instanceof AppError) { res.status(error.statusCode).json(ApiResponse.error(error.statusCode < 500 ? error.message : 'Service unavailable.',error.statusCode < 500 ? error.errorCode : 'SERVICE_UNAVAILABLE',error.statusCode < 500 ? error.details : undefined)); return; }
   const code = (error as {code?:string}).code;
   if(['23505','23503','23514','22P02','22007'].includes(code??'')) { res.status(409).json(ApiResponse.error('The record conflicts with existing data or has invalid relationships.','DATA_CONFLICT')); return; }
   res.status(503).json(ApiResponse.error('This service is temporarily unavailable. Please try again.','SERVICE_UNAVAILABLE'));
@@ -49,7 +54,7 @@ export async function warehouse(c:PoolClient,a:AuthContext,id:string) {
 }
 export const orgParams = (a:AuthContext)=>[a.organizationId,a.role==='ADMIN',a.userId];
 export const projectScope = (alias:string)=>`${alias}.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_project_access g WHERE g.project_id=${alias}.project_id AND g.user_id=$3)) AND (${alias}.site_id IS NULL OR $2::boolean OR EXISTS(SELECT 1 FROM user_site_access sg WHERE sg.site_id=${alias}.site_id AND sg.user_id=$3))`;
-export const warehouseScope=(alias:string)=>`${alias}.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_warehouse_access g WHERE g.warehouse_id=${alias}.warehouse_id AND g.user_id=$3)) AND EXISTS(SELECT 1 FROM warehouses sw WHERE sw.id=${alias}.warehouse_id AND (sw.site_id IS NULL OR $2::boolean OR EXISTS(SELECT 1 FROM user_site_access sa JOIN sites si ON si.id=sa.site_id JOIN user_project_access pa ON pa.user_id=sa.user_id AND pa.project_id=si.project_id WHERE sa.user_id=$3 AND sa.site_id=sw.site_id)))`;
+export const warehouseScope=(alias:string,column:'warehouse_id'|'destination_id'='warehouse_id')=>`${alias}.organization_id=$1 AND ($2::boolean OR EXISTS(SELECT 1 FROM user_warehouse_access g WHERE g.warehouse_id=${alias}.${column} AND g.user_id=$3)) AND EXISTS(SELECT 1 FROM warehouses sw WHERE sw.id=${alias}.${column} AND (sw.site_id IS NULL OR $2::boolean OR EXISTS(SELECT 1 FROM user_site_access sa JOIN sites si ON si.id=sa.site_id JOIN user_project_access pa ON pa.user_id=sa.user_id AND pa.project_id=si.project_id WHERE sa.user_id=$3 AND sa.site_id=sw.site_id)))`;
 export async function insert(c:PoolClient,table:string,data:Record<string,unknown>) {
  const keys=Object.keys(data); const r=await c.query(`INSERT INTO ${table} (${keys.join(',')}) VALUES(${keys.map((_,i)=>`$${i+1}`).join(',')}) RETURNING *`,Object.values(data)); return r.rows[0];
 }

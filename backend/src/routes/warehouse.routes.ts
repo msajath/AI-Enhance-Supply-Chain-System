@@ -27,7 +27,9 @@ export function createWarehouseRouter() {
  // Existing material master is the only catalogue; managers may register materials here.
  r.post('/materials',permit('inventory.receive'),safe(async(req,res)=>{
   const v=z.object({code:text,name:text,unit:text,category:text,reorder_level:amount}).strict().parse(req.body),a=req.auth!;
-  const row=await withTransaction(async c=>{const m=await insert(c,'materials',{...v,organization_id:a.organizationId});await audit(c,a,'MATERIAL_CREATED',{id:m.id});return m;});res.status(201).json(ApiResponse.success({row}));
+  const row=await withTransaction(async c=>{await c.query('INSERT INTO material_categories VALUES ($1,$2) ON CONFLICT DO NOTHING',[a.organizationId,v.category]);
+    await c.query("INSERT INTO catalog_units VALUES ($1,$2,'legacy:' || $2) ON CONFLICT DO NOTHING",[a.organizationId,v.unit]);
+    const m=await insert(c,'materials',{...v,organization_id:a.organizationId});await audit(c,a,'MATERIAL_CREATED',{id:m.id});return m;});res.status(201).json(ApiResponse.success({row}));
  }));
  const inventorySql=`SELECT b.*,m.code,m.name,m.unit,m.category,m.reorder_level,w.name warehouse_name,b.quantity-b.reserved available_quantity,
     b.quantity-b.reserved<=m.reorder_level low_stock FROM stock_balances b JOIN materials m ON m.id=b.material_id JOIN warehouses w ON w.id=b.warehouse_id WHERE ${warehouseScope('b')}`;
@@ -42,7 +44,7 @@ export function createWarehouseRouter() {
    const rows=(await pool.query(`SELECT d.*,m.name material_name,m.unit,w.name warehouse_name,dest.name destination_name,u.full_name created_by_name,d.quantity+d.rejected_quantity received_quantity,
       CASE WHEN d.kind='COUNT' THEN d.quantity-d.expected_quantity ELSE NULL END variance
       FROM stock_documents d JOIN materials m ON m.id=d.material_id JOIN warehouses w ON w.id=d.warehouse_id LEFT JOIN warehouses dest ON dest.id=d.destination_id JOIN users u ON u.id=d.created_by
-      WHERE d.kind=$4 AND ((${warehouseScope('d')}) OR d.organization_id=$1 AND d.kind='TRANSFER' AND EXISTS(SELECT 1 FROM user_warehouse_access g WHERE g.warehouse_id=d.destination_id AND g.user_id=$3)) ORDER BY d.created_at DESC`,[...orgParams(req.auth!),definition.kind])).rows;
+      WHERE d.kind=$4 AND ((${warehouseScope('d')}) OR d.kind='TRANSFER' AND (${warehouseScope('d','destination_id')})) ORDER BY d.created_at DESC`,[...orgParams(req.auth!),definition.kind])).rows;
    res.json(ApiResponse.success({rows}));
   }));
   r.post('/'+route,permit(definition.permission),safe(async(req,res)=>{
