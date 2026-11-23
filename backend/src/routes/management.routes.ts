@@ -7,6 +7,9 @@ import { ApiResponse } from '../utils/apiResponse';
 import { requireAuth } from '../middleware/authenticate';
 import { createAdminRouter } from './admin.routes';
 import { createFleetRouter } from './fleet.routes';
+import { catalogRouter } from './catalog.routes';
+import { requisitionRouter } from './requisitions.routes';
+import { scorecardRouter } from './scorecards.routes';
 import { createWarehouseRouter } from './warehouse.routes';
 import { safe,fail,audit,permit,orgParams,projectScope,warehouseScope,text } from '../modules/management/shared';
 import { PERMISSIONS, ROLES, DASHBOARD_PREFIX, ROLE_LABELS, hasPermission } from '../auth/permissions';
@@ -87,6 +90,9 @@ export function createManagementRouter(sessionMiddleware:RequestHandler) {
   const rows=(await pool.query(`SELECT l.id,l.event_type,l.module,l.metadata,l.created_at,u.full_name actor FROM system_audit_logs l LEFT JOIN users u ON u.id=l.actor_id WHERE u.organization_id=$1::uuid OR l.metadata->>'organization_id'=$1::text ORDER BY l.created_at DESC LIMIT 1000`,[req.auth!.organizationId])).rows;
   res.json(ApiResponse.success({rows}));
  }));
+ r.use('/procurement/catalog', catalogRouter);
+ r.use('/procurement', requisitionRouter);
+ r.use('/procurement', scorecardRouter);
  r.use('/admin',createAdminRouter());r.use('/fleet',createFleetRouter());r.use('/warehouse',createWarehouseRouter());
  return r;
 }

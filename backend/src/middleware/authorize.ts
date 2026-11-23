@@ -91,11 +91,11 @@ export function requireProjectAccess(
         next();
         return;
       }
-      res.status(400).json(ApiResponse.error('A project ID is required.', 'VALIDATION_ERROR'));
+      res.status(400).json(ApiResponse.error('A project ID is required.', 'VALIDATION_ERROR', [{ field: 'projectId', message: 'A project ID is required.' }]));
       return;
     }
     if (!isUuid(projectId)) {
-      res.status(400).json(ApiResponse.error('Project ID must be a valid UUID.', 'VALIDATION_ERROR'));
+      res.status(400).json(ApiResponse.error('Project ID must be a valid UUID.', 'VALIDATION_ERROR', [{ field: 'projectId', message: 'Project ID must be a valid UUID.' }]));
       return;
     }
     try {
