@@ -26,7 +26,8 @@
     "db:migrate": "npm run db:migrate --workspace=backend",
     "db:seed": "npm run db:seed --workspace=backend",
     "db:rollback": "npm run db:rollback --workspace=backend",
-    "openapi:check": "node scripts/validate-openapi.mjs"
+    "openapi:check": "node scripts/validate-openapi.mjs",
+    "db:migrations:check": "node scripts/check-migrations.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^13.1.0",
