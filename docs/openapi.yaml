@@ -1,0 +1,489 @@
+
+openapi: 3.0.3
+
+info:
+  title: Qorvenz Logistics Management API
+  version: 1.0.0
+  description: |
+    Version 1 of the Qorvenz Tech REST API.
+
+    This is the initial documented core API contract for AESCS-30.
+    It is not yet a complete inventory of every backend endpoint.
+
+    Protected endpoints support the existing authentication system.
+    Bearer JWT authentication is described here; the application
+    also supports its existing session-based authentication.
+
+servers:
+  - url: /api/v1
+    description: Version 1 API
+
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Organization
+  - name: Administration
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Check API and database health
+      description: Returns HTTP 200 even when the database is degraded.
+      responses:
+        '200':
+          description: Health information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                data:
+                  status: healthy
+                  service: qorvenz-api
+                  version: 0.1.0
+                  database:
+                    status: connected
+                    latencyMs: 3
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Sign in with existing credentials
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              additionalProperties: false
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 255
+                password:
+                  type: string
+                  format: password
+                  minLength: 1
+                  maxLength: 72
+                role:
+                  type: string
+                  description: Optional backend-defined role code
+            example:
+              email: admin@example.test
+              password: example-password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                data:
+                  accessToken: example-jwt-token
+                  tokenType: Bearer
+                  expiresIn: 3600
+                  user:
+                    id: 11111111-1111-4111-8111-111111111111
+                    roleCode: ADMIN
+                    role: Admin
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/access-requests:
+    post:
+      tags: [Authentication]
+      operationId: requestAccountAccess
+      summary: Submit a request for an account
+      description: |
+        Does not immediately create an active account.
+        An administrator must approve the request.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - fullName
+                - email
+                - organizationCode
+                - requestedRole
+                - password
+              properties:
+                fullName:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                email:
+                  type: string
+                  format: email
+                organizationCode:
+                  type: string
+                requestedRole:
+                  type: string
+                  enum:
+                    - WAREHOUSE_MANAGER
+                    - FLEET_MANAGER
+                    - DRIVER
+                password:
+                  type: string
+                  format: password
+                  minLength: 12
+                  maxLength: 72
+            example:
+              fullName: Example User
+              email: new-user@example.test
+              organizationCode: QOR-HQ-01
+              requestedRole: DRIVER
+              password: example-password-123
+      responses:
+        '202':
+          description: Request sent for administrator review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                data: null
+                message: Your request has been sent to your administrator.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /projects:
+    get:
+      tags: [Organization]
+      operationId: listProjects
+      summary: List accessible projects
+      description: Projects are limited to the caller's authorized scope.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Accessible projects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                data:
+                  projects: []
+                  scope:
+                    companyWide: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /projects/{projectId}:
+    get:
+      tags: [Organization]
+      operationId: getProject
+      summary: Retrieve an accessible project
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{projectId}/sites:
+    get:
+      tags: [Organization]
+      operationId: listProjectSites
+      summary: List sites for an accessible project
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Project sites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                data:
+                  sites: []
+                  scope:
+                    companyWide: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /sites:
+    get:
+      tags: [Organization]
+      operationId: listSites
+      summary: List accessible sites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Optional project filter
+      responses:
+        '200':
+          description: Accessible sites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                data:
+                  sites: []
+                  scope:
+                    companyWide: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/roles:
+    get:
+      tags: [Administration]
+      operationId: listRoles
+      summary: View roles and their permissions
+      description: Requires users.read permission.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Organization roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                data:
+                  rows:
+                    - id: ADMIN
+                      name: Admin
+                      permissions:
+                        - users.read
+                        - users.update
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users:
+    get:
+      tags: [Administration]
+      operationId: listUsers
+      summary: List organization users
+      description: Requires users.read permission.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Organization user records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                data:
+                  rows:
+                    - id: 11111111-1111-4111-8111-111111111111
+                      full_name: Example Admin
+                      email: admin@example.test
+                      role: ADMIN
+                      is_active: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{userId}:
+    patch:
+      tags: [Administration]
+      operationId: updateUser
+      summary: Update an organization's user
+      description: |
+        Requires users.update permission.
+        This example documents the role-change use case.
+        The endpoint also supports other validated user fields.
+        The backend protects self-role changes and the last administrator.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                role:
+                  type: string
+                  description: Existing backend-supported role code
+            example:
+              role: FLEET_MANAGER
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT issued by the login endpoint.
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    SuccessResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          description: Endpoint-specific response payload
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Unauthorized:
+      description: Authentication is required or has expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: UNAUTHORIZED
+              message: Authentication required.
+
+    Forbidden:
+      description: The account lacks permission
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: FORBIDDEN
+              message: You do not have permission to perform this action.
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Conflict:
+      description: Request conflicts with an existing record
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
