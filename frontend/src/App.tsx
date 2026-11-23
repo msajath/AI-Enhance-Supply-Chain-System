@@ -12,6 +12,7 @@ import { ManagedRoute, RolesPage, Modal, DataTable } from './pages/Management';
 import { ProjectsPage } from './pages/Projects';
 import { SitesPage } from './pages/Sites';
 import { nav, resources, rolePrefix, navigationPermission } from './pages/managementConfig';
+import { AdminOrganizationPage } from './pages/AdminOrganization';
 import './management.css';
 
 type Theme = 'light' | 'dark';
@@ -25,7 +26,7 @@ function greeting(date = new Date()) {
 const today = () => new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
 const ICONS: Record<string, IconName> = {
-  dashboard: 'grid', users: 'users', requests: 'bell', roles: 'check', projects: 'building', sites: 'pin', warehouses: 'package', audit: 'clock', settings: 'settings',
+  dashboard: 'grid', users: 'users', organizations: 'building',requests: 'bell', roles: 'check', projects: 'building', sites: 'pin', warehouses: 'package', audit: 'clock', settings: 'settings',
   vehicles: 'truck', drivers: 'users', assignments: 'route', equipment: 'package', maintenance: 'settings', fuel: 'chart', reports: 'chart',
   inventory: 'box', materials: 'package', receipts: 'truck', issues: 'arrow', transfers: 'route', counts: 'check', adjustments: 'filter', returns: 'more', movements: 'clock',
 };
@@ -139,6 +140,12 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   let page;
   if (key === prefix + '/dashboard') page = <Dashboard prefix={prefix} user={user}/>;
   else if (key === 'admin/roles') page = <RolesPage/>;
+  else if (
+  key === 'admin/organizations' &&
+  items.some((entry) => entry.path === location.pathname)
+) {
+  page = <AdminOrganizationPage organization={context.organization}/>;
+}
   else if (key === 'warehouse/projects') page = <ProjectsPage onViewSites={(projectId) => navigate('/warehouse/sites', { state: { projectId } })}/>;
   else if (key === 'warehouse/sites') page = <SitesPage key={sitesProject} initialProjectId={sitesProject}/>;
   else if (resources[key] && items.some(entry=>entry.path===location.pathname)) page = <ManagedRoute path={key} context={context} onChanged={() => setRevision((v) => v + 1)} scope={scope}/>;
