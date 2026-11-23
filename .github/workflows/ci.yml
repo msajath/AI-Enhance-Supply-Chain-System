@@ -68,6 +68,9 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: Validate Database Migration Files
+        run: npm run db:migrations:check
+
       - name: Execute Database Migrations
         run: npm run db:migrate
 
