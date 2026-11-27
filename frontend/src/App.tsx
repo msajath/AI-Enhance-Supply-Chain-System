@@ -1,3 +1,4 @@
+import RecoveryPage from './pages/Recovery';
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import {roleCatalog} from './services/roles';
@@ -12,6 +13,10 @@ import { ManagedRoute, Modal, DataTable } from './pages/Management';
 import { AdminRolesPage } from './pages/AdminRoles';
 import { ProjectsPage } from './pages/Projects';
 import { SitesPage } from './pages/Sites';
+import ProjectManagementPage from './pages/ProjectForm';
+import { MaterialsPage } from './pages/Materials';
+import { SuppliersPage } from './pages/Suppliers';
+import { RequisitionsPage } from './pages/Requisitions';
 import { nav, resources, rolePrefix, navigationPermission } from './pages/managementConfig';
 import { AdminOrganizationPage } from './pages/AdminOrganization';
 import './management.css';
@@ -49,15 +54,16 @@ const INTRO: Record<string, string> = {
   driver: 'Here are the trips your fleet manager has assigned to you.',
 };
 
-function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
+function Dashboard({ prefix, user, scope }: { prefix: string; user: AuthUser; scope: string }) {
   const [data, setData] = useState<{ cards: { label: string; value: unknown }[]; activity: Row[]; alerts: Row[]; modulesPending?: boolean } | null>(null);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let active = true; setData(null); setError('');
-    read<typeof data>(prefix + '/dashboard').then((d) => { if (active) setData(d); }).catch((e) => { if (active) setError(errorMessage(e)); });
+    const filter=scope?'?'+(prefix==='warehouse'?'warehouse_id':'project_id')+'='+encodeURIComponent(scope):'';
+    read<typeof data>(prefix + '/dashboard'+filter).then((d) => { if (active) setData(d); }).catch((e) => { if (active) setError(errorMessage(e)); });
     return () => { active = false; };
-  }, [prefix, revision]);
+  }, [prefix, revision, scope]);
   const columns = (rows: Row[]) => rows[0] ? Object.keys(rows[0]).filter((k) => k !== 'id') : [];
   const firstTask = navFor(prefix, user)[1];
   return <>
@@ -66,6 +72,7 @@ function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
         <p className="hero-date">{today()}</p>
         <h1>{greeting()}, {user.full_name.split(' ')[0]}</h1>
         <p>{INTRO[prefix]??`Your ${user.role.toLowerCase()} workspace.`}{prefix !== 'driver' && ' Figures reflect only the projects and warehouses you can access.'}</p>
+        {prefix==='admin'&&<p>User and access-request figures cover your company. The project count follows the selected project.</p>}
         <div className="hero-actions">
           {firstTask && <Link className="button button-primary" to={firstTask.path}><Icon name={iconFor(firstTask.path)} size={17}/>{firstTask.label}</Link>}
           <button type="button" className="button button-ghost" onClick={() => setRevision((v) => v + 1)}>Refresh</button>
@@ -127,6 +134,9 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   const signOut = async () => { if (busy) return; setBusy(true); setError(''); try { await onLogout(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); } };
   const warehouseView=prefix==='warehouse'||resources[key]?.path.startsWith('warehouse/');
   const scopes = warehouseView ? context.warehouses : context.projects;
+  const supportsScope = key===prefix+'/dashboard'
+    ? ['admin','fleet','warehouse'].includes(prefix)
+    : Boolean(resources[key]&&!resources[key].path.startsWith('admin/')&&resources[key].path!=='warehouse/materials');
   const accountSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (busy) return;
     const form = new FormData(event.currentTarget); setBusy(true); setError('');
@@ -139,24 +149,19 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   const sitesProject = (location.state as { projectId?: string } | null)?.projectId ?? '';
 
   let page;
-  if (key === prefix + '/dashboard') page = <Dashboard prefix={prefix} user={user}/>;
-  else if (
-  key === 'admin/roles' &&
-  items.some((entry) => entry.path === location.pathname)
-) {
-  page = (
-    <AdminRolesPage
-      currentUserId={user.id}
-      canUpdate={user.permissions?.includes('users.update') ?? false}
-    />
-  );
-}
-  else if (
-  key === 'admin/organizations' &&
-  items.some((entry) => entry.path === location.pathname)
-) {
-  page = <AdminOrganizationPage organization={context.organization}/>;
-}
+  if (key === prefix + '/dashboard') page = <Dashboard prefix={prefix} user={user} scope={scope}/>;
+  else if (key === 'admin/roles' && items.some((entry) => entry.path === location.pathname)) {
+    page = <AdminRolesPage currentUserId={user.id} canUpdate={user.permissions?.includes('users.update') ?? false}/>;
+  }
+  else if (key === 'admin/organizations' && items.some((entry) => entry.path === location.pathname)) {
+    page = <AdminOrganizationPage organization={context.organization}/>;
+  }
+  else if (key === prefix + '/projects' && prefix !== 'admin' && items.some(entry=>entry.path===location.pathname)) page = <ProjectsPage onViewSites={(projectId) => navigate('/'+prefix+'/sites', { state: { projectId } })} canCreate={false}/>;
+  else if (key === prefix + '/sites' && prefix !== 'admin' && items.some(entry=>entry.path===location.pathname)) page = <SitesPage key={sitesProject} initialProjectId={sitesProject} canCreate={false}/>;
+  else if (key === 'admin/projects/new' || key === 'projects/new') page = <ProjectManagementPage/>;
+  else if (key === 'warehouse/materials' || key === 'admin/materials') page = <MaterialsPage canRegister={user.permissions?.includes('inventory.receive') ?? (prefix === 'admin' || prefix === 'warehouse')}/>;
+  else if (key === 'warehouse/suppliers' || key === 'admin/suppliers') page = <SuppliersPage canViewPricing={user.permissions?.includes('procurement.pricing.read') ?? (prefix === 'admin' || prefix === 'warehouse')}/>;
+  else if (key === prefix+'/requisitions' && items.some(entry=>entry.path===location.pathname)) page = <RequisitionsPage isApprover={user.permissions?.includes('requisition.approve')??false} canCreate={user.permissions?.includes('requisition.create')??false} canList={user.permissions?.includes('requisition.read')??false}/>;
   else if (key === 'warehouse/projects') page = <ProjectsPage onViewSites={(projectId) => navigate('/warehouse/sites', { state: { projectId } })}/>;
   else if (key === 'warehouse/sites') page = <SitesPage key={sitesProject} initialProjectId={sitesProject}/>;
   else if (resources[key] && items.some(entry=>entry.path===location.pathname)) page = <ManagedRoute path={key} context={context} onChanged={() => setRevision((v) => v + 1)} scope={scope}/>;
@@ -187,7 +192,7 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
         <button className="mobile-menu icon-button" aria-label="Open menu" onClick={() => setMenu(true)}><Icon name="menu"/></button>
         <span className="topbar-crumbs"><span>{user.role}</span><strong>{item?.label ?? 'Page'}</strong></span>
         <div className="top-actions">
-          {prefix !== 'driver' && <label className="filter-select scope-select"><Icon name="filter" size={15}/><span className="visually-hidden">{warehouseView ? 'Warehouse' : 'Project'}</span>
+          {prefix !== 'driver' && supportsScope && <label className="filter-select scope-select"><Icon name="filter" size={15}/><span className="visually-hidden">{warehouseView ? 'Warehouse' : 'Project'}</span>
             <select aria-label="Project or warehouse filter" value={scope} onChange={(e) => setScope(e.target.value)}><option value="">All my {warehouseView ? 'warehouses' : 'projects'}</option>{scopes.map((s) => <option key={s.id} value={s.id}>{String(s.name)}</option>)}</select>
           </label>}
           <span className="role-badge">{user.role}</span>
@@ -228,6 +233,6 @@ function Application() {
  if(restoring)return <main className="login-page"><p role="status">Restoring your session...</p></main>;
  const home=user?'/'+rolePrefix(user.role)+'/dashboard':'/login';
  const protectedRole=(role:AuthUser['role'])=>!user?<Navigate to="/login" replace/>:(rolePrefix(user.role)!==rolePrefix(role) || user.permissions && !user.permissions.includes('dashboard.'+rolePrefix(role)+'.read'))?<main className="access-denied"><h1>Access Denied</h1><p>Your account is not authorized for this workspace.</p><Link className="button button-primary" to={home}>Return to your dashboard</Link></main>:<Shell user={user} theme={theme} toggleTheme={toggleTheme} onLogout={onLogout} onExpired={expire}/>;
- return <Routes><Route path="/login" element={user?<Navigate to={home} replace/>:<LoginPage onSignIn={signIn} sessionError={sessionError} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>}/>{Array.from(new Map(roleCatalog.map(role=>[role.prefix,role])).values()).map(role=><Route key={role.code} path={'/'+role.prefix+'/*'} element={protectedRole(role.label)}/>)}<Route path="*" element={<Navigate to={home} replace/>}/></Routes>;
+ return <Routes><Route path="/forgot-password" element={<RecoveryPage theme={theme} toggleTheme={toggleTheme}/>}/><Route path="/reset-password" element={<RecoveryPage reset theme={theme} toggleTheme={toggleTheme}/>}/><Route path="/login" element={user?<Navigate to={home} replace/>:<LoginPage onSignIn={signIn} sessionError={sessionError} email={email} setEmail={setEmail} theme={theme} toggleTheme={toggleTheme}/>}/>{Array.from(new Map(roleCatalog.map(role=>[role.prefix,role])).values()).map(role=><Route key={role.code} path={'/'+role.prefix+'/*'} element={protectedRole(role.label)}/>)}<Route path="*" element={<Navigate to={home} replace/>}/></Routes>;
 }
 export default function App() {return <BrowserRouter future={{v7_startTransition:true,v7_relativeSplatPath:true}}><Application/></BrowserRouter>;}

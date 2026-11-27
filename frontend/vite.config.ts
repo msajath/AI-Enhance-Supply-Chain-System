@@ -1,11 +1,17 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
+import os from 'os';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load env variables from the repository root .env
   const env = loadEnv(mode, path.resolve(__dirname, '..'), '');
+  // Created explicitly by scripts/create-demo-roles.ts; never included in production.
+  const privateDemoFile = path.join(os.homedir(), 'Qorvenz_Private_Demo', 'accounts.json');
+  const additional: Record<string, string> = mode === 'development' && fs.existsSync(privateDemoFile)
+    ? JSON.parse(fs.readFileSync(privateDemoFile, 'utf8')) : {};
 
   // Quick demo logins on the sign-in page (development only). The passwords come from the
   // same SEED_PASSWORD_* values the seed script uses, so the buttons always match the database.
@@ -15,6 +21,7 @@ export default defineConfig(({ mode }) => {
     fleet: env.SEED_PASSWORD_FLEET ?? '',
     warehouse: env.SEED_PASSWORD_WAREHOUSE_CEN ?? '',
     storekeeper: env.SEED_PASSWORD_STOREKEEPER_MAT ?? '',
+    additional,
   } : null;
 
   return {

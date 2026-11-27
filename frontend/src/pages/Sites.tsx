@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { fetchProjects, fetchSites, isCanceled, loadErrorMessage, type Project, type Site } from '../services/organization';
 import { EmptyState, ErrorState, LoadingRows, PinIcon, StatusPill } from './orgShared';
+import { SiteFormModal } from './ProjectForm';
 
 /**
- * Sites page with project filter (Jira AESCS-42 / AESCS-163, Member 3).
+ * Sites page with project filter (Jira AESCS-42 / AESCS-163 / AESCS-44, Member 3).
  * The filter only offers projects the server returned for this user, and the
  * server re-checks the chosen project, so other projects' sites never appear.
  */
@@ -13,11 +14,12 @@ type State =
   | { status: 'error'; message: string }
   | { status: 'ready'; sites: Site[] };
 
-export function SitesPage({ initialProjectId = '' }: { initialProjectId?: string }) {
+export function SitesPage({ initialProjectId = '', canCreate = false }: { initialProjectId?: string; canCreate?: boolean }) {
   const [projectId, setProjectId] = useState(initialProjectId);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [state, setState] = useState<State>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Projects for the filter. If this fails the filter just stays on "All projects".
   useEffect(() => {
@@ -43,7 +45,25 @@ export function SitesPage({ initialProjectId = '' }: { initialProjectId?: string
         <h1>Sites</h1>
         <p>Construction sites in the projects you can access.</p>
       </div>
+      {canCreate && (
+        <button
+          type="button"
+          className="button button-primary"
+          onClick={() => setShowCreateModal(true)}
+          aria-label="Create new site"
+        >
+          + New Site
+        </button>
+      )}
     </div>
+    {showCreateModal && (
+      <SiteFormModal
+        fixedProjectId={projectId || undefined}
+        projects={projects ?? undefined}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => setAttempt((n) => n + 1)}
+      />
+    )}
     <section className="panel org-panel" aria-busy={state.status === 'loading'} aria-labelledby="sites-title">
       <div className="panel-heading">
         <div>

@@ -9,7 +9,10 @@ import type { AuthContext } from '../../middleware/authenticate';
 export const uuid = z.string().uuid();
 export const text = z.string().trim().min(1).max(255);
 export const amount = z.number().finite().min(0).max(999999999).multipleOf(0.001);
-export const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>!Number.isNaN(Date.parse(v)),'Invalid date');
+export const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+ const parsed = new Date(value + 'T00:00:00.000Z');
+ return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0,10) === value && value.slice(0,4) !== '0000';
+}, 'Invalid calendar date');
 export const stamp = z.string().datetime({offset:true});
 export const optionalId = uuid.nullable().optional();
 export function fail(message: string, status = 409, field = 'body'): never {

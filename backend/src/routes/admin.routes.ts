@@ -9,6 +9,7 @@ import { safe, permit, uuid, text, date, optionalId, amount, fail, insert, updat
 const password=z.string().min(12).max(72).refine(v=>Buffer.byteLength(v)<=72,'Maximum 72 password bytes');
 const userSchema=z.object({email:z.string().trim().email().max(255).transform(v=>v.toLowerCase()),full_name:text,role:z.enum(ROLES),is_active:z.boolean().default(true),password:password.optional()}).strict();
 const definitions = {
+ departments:{table:'departments',permission:'settings.manage',schema:z.object({code:text,name:text,cost_center_code:z.string().trim().min(1).max(50).nullable().optional(),is_active:z.boolean()}).strict()},
  projects:{table:'projects',permission:'projects.manage',schema:z.object({code:text,name:text,status:z.enum(['PLANNED','ACTIVE','ON_HOLD','COMPLETED','CANCELLED']),start_date:date.nullable().optional(),end_date:date.nullable().optional()}).strict()},
  sites:{table:'sites',permission:'sites.manage',schema:z.object({project_id:uuid,code:text,name:text,address:z.string().max(2000).nullable().optional(),status:z.enum(['ACTIVE','INACTIVE','CLOSED'])}).strict()},
  warehouses:{table:'warehouses',permission:'warehouses.manage',schema:z.object({code:text,name:text,location:text,capacity:amount,warehouse_type:z.enum(['CENTRAL','REGIONAL','SITE']),site_id:optionalId,is_active:z.boolean()}).strict()},
@@ -109,12 +110,19 @@ export function createAdminRouter() {
  for(const [route,d] of Object.entries(definitions)) {
   r.get('/'+route,safe(async(req,res)=>res.json(ApiResponse.success({rows:(await pool.query(`SELECT * FROM ${d.table} WHERE organization_id=$1 ORDER BY name`,[req.auth!.organizationId])).rows}))));
   for(const method of ['post','patch'] as const) r[method]('/'+route+(method==='patch'?'/:id':''),permit(d.permission),safe(async(req,res)=>{
-   const v=d.schema.parse(req.body),a=req.auth!,id=method==='patch'?uuid.parse(req.params.id):undefined;
+   const v=(method==='patch'?d.schema.partial():d.schema).parse(req.body),a=req.auth!,id=method==='patch'?uuid.parse(req.params.id):undefined;
+   if(!Object.keys(v).length) fail('No changes supplied.',400);
    const row=await withTransaction(async c=>{
-    if('start_date' in v && v.start_date && v.end_date && v.end_date<v.start_date) fail('Project end date cannot precede its start date.',400);
-    if('project_id' in v && !(await c.query('SELECT id FROM projects WHERE id=$1 AND organization_id=$2',[v.project_id,a.organizationId])).rowCount) fail('Project access denied.',403);
-    if('warehouse_type' in v && ((v.warehouse_type==='SITE')!==Boolean(v.site_id))) fail('SITE warehouses require a site; central and regional warehouses must not have one.',400);
-    if('site_id' in v && v.site_id) await site(c,a,v.site_id);
+    const previous=id?(await c.query(`SELECT * FROM ${d.table} WHERE id=$1 AND organization_id=$2 FOR UPDATE`,[id,a.organizationId])).rows[0]:undefined;
+    if(id&&!previous) fail('Record not found.',404);
+    const combined={...previous,...v};
+    const final=d.schema.parse(Object.fromEntries(Object.keys(d.schema.shape).filter(key=>key in combined).map(key=>[
+     key,combined[key] instanceof Date?[combined[key].getFullYear(),String(combined[key].getMonth()+1).padStart(2,'0'),String(combined[key].getDate()).padStart(2,'0')].join('-'):combined[key],
+    ])));
+    if('start_date' in final && final.start_date && final.end_date && final.end_date<final.start_date) fail('Project end date cannot precede its start date.',400);
+    if('project_id' in final && !(await c.query('SELECT id FROM projects WHERE id=$1 AND organization_id=$2',[final.project_id,a.organizationId])).rowCount) fail('Project access denied.',403);
+    if('warehouse_type' in final && ((final.warehouse_type==='SITE')!==Boolean(final.site_id))) fail('SITE warehouses require a site; central and regional warehouses must not have one.',400);
+    if('site_id' in final && final.site_id) await site(c,a,final.site_id);
     const saved=id?await update(c,d.table,id,a.organizationId,v):await insert(c,d.table,{...v,organization_id:a.organizationId});
     await audit(c,a,`${route.toUpperCase()}_${id?'UPDATED':'CREATED'}`,{id:saved.id,changes:v});return saved;
    });res.status(id?200:201).json(ApiResponse.success({row}));

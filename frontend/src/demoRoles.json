@@ -1,0 +1,12 @@
+[
+  { "role": "Supply chain manager", "code": "SUPPLY_CHAIN_MANAGER", "email": "management@demo.qorvenz.test", "prefix": "management", "projectAccess": true },
+  { "role": "Procurement officer", "code": "PROCUREMENT_OFFICER", "email": "procurement@demo.qorvenz.test", "prefix": "procurement", "projectAccess": true },
+  { "role": "Logistics coordinator", "code": "LOGISTICS_COORDINATOR", "email": "logistics@demo.qorvenz.test", "prefix": "logistics", "projectAccess": true },
+  { "role": "Project manager", "code": "PROJECT_MANAGER", "email": "project@demo.qorvenz.test", "prefix": "project", "projectAccess": true },
+  { "role": "Site storekeeper", "code": "SITE_STOREKEEPER", "email": "site@demo.qorvenz.test", "prefix": "site", "projectAccess": true },
+  { "role": "Finance officer", "code": "FINANCE_OFFICER", "email": "finance@demo.qorvenz.test", "prefix": "finance", "projectAccess": true },
+  { "role": "Driver / operator", "code": "DRIVER_OPERATOR", "email": "driver.operator@demo.qorvenz.test", "prefix": "driver", "projectAccess": false },
+  { "role": "Supplier", "code": "SUPPLIER_USER", "email": "supplier@demo.qorvenz.test", "prefix": "supplier", "projectAccess": false },
+  { "role": "Auditor", "code": "AUDITOR", "email": "auditor@demo.qorvenz.test", "prefix": "auditor", "projectAccess": true },
+  { "role": "Driver", "code": "DRIVER", "email": "driver@demo.qorvenz.test", "prefix": "driver", "projectAccess": false }
+]

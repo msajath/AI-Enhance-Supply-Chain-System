@@ -11,6 +11,11 @@ import { requestLogger } from './middleware/requestLogger';
 import { errorHandler } from './middleware/errorHandler';
 import { rootRouter } from './routes';
 import { AppError } from './utils/apiResponse';
+import { requireAuth } from './middleware/authenticate';
+import { domainRequestPolicy } from './middleware/domainRequestPolicy';
+import { createProcurementRouter } from './routes/procurement.routes';
+import { createDeliveryRouter } from './routes/delivery.routes';
+import { createReportingRouter } from './routes/reporting.routes';
 
 export function createApp(sessionStore?: session.Store): Express {
   const app = express();
@@ -41,6 +46,9 @@ export function createApp(sessionStore?: session.Store): Express {
 
   // Mount API and health routes
   app.use('/api/v1/auth', createAuthRouter(store));
+  app.use('/api/v1/procurement', createSessionMiddleware(store),requireAuth,domainRequestPolicy,createProcurementRouter());
+  app.use('/api/v1/delivery', createSessionMiddleware(store),requireAuth,domainRequestPolicy,createDeliveryRouter());
+  app.use('/api/v1/reports', createSessionMiddleware(store),requireAuth,domainRequestPolicy,createReportingRouter());
   app.use('/api/v1', createManagementRouter(createSessionMiddleware(store)));
   app.use('/api/v1', createOrganizationRouter(createSessionMiddleware(store)));
   app.use(rootRouter);
