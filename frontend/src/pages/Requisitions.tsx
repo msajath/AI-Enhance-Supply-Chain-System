@@ -9,7 +9,7 @@ import {
   type PurchaseRequisition,
   type ApprovalRequest,
 } from '../services/requisitions';
-import { fetchProjects, type Project } from '../services/organization';
+import { fetchProjects, fetchSites, type Project, type Site } from '../services/organization';
 import { fetchMaterials, type Material } from '../services/materials';
 import { StatusPill, EmptyState, ErrorState, LoadingRows } from './orgShared';
 
@@ -19,6 +19,7 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
   // Shared Reference Data
   const [projects, setProjects] = useState<Project[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [sites,setSites]=useState<Site[]>([]),[siteId,setSiteId]=useState('');
   const [loadingRefs, setLoadingRefs] = useState(true);
   const [referenceError, setReferenceError] = useState('');
 
@@ -26,8 +27,8 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
   const [projectId, setProjectId] = useState('');
   const [requiredByDate, setRequiredByDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [lines, setLines] = useState<Array<{ material_id: string; quantity: string; unit: string }>>([
-    { material_id: '', quantity: '1', unit: '' },
+  const [lines, setLines] = useState<Array<{ material_id: string; quantity: string; unit: string; estimated_unit_price:string }>>([
+    { material_id: '', quantity: '1', unit: '',estimated_unit_price:'' },
   ]);
   const [formErrors, setFormErrors] = useState<{ project?: string; date?: string; lines?: string }>({});
   const [formError, setFormError] = useState('');
@@ -60,11 +61,13 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
     setReferenceError('');
     Promise.all([
       fetchProjects(controller.signal).then((res) => res.projects),
-      fetchMaterials(controller.signal),
+      fetchMaterials(controller.signal,true),
+      fetchSites(undefined,controller.signal).then(res=>res.sites),
     ])
-      .then(([prjs, mats]) => {
+      .then(([prjs, mats, authorizedSites]) => {
         setProjects(prjs);
         setMaterials(mats);
+        setSites(authorizedSites);
       })
       .catch(error => { if (!controller.signal.aborted) setReferenceError(requisitionErrorMessage(error, 'project and material reference data')); })
       .finally(() => { if (!controller.signal.aborted) setLoadingRefs(false); });
@@ -125,7 +128,7 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
 
   // Form line manipulation
   const handleAddLine = () => {
-    setLines((prev) => [...prev, { material_id: '', quantity: '1', unit: '' }]);
+    setLines((prev) => [...prev, { material_id: '', quantity: '1', unit: '',estimated_unit_price:'' }]);
     setFormErrors((prev) => ({ ...prev, lines: undefined }));
   };
 
@@ -151,6 +154,7 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
   const validateForm = (): boolean => {
     const errs: { project?: string; date?: string; lines?: string } = {};
     if (!projectId) errs.project = 'Project is required.';
+    else if(!siteId) errs.project='Select an authorized site for this project.';
     if (!requiredByDate) errs.date = 'Required-by date is required.';
 
     if (lines.length === 0) {
@@ -167,6 +171,7 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
           errs.lines = `Line ${i + 1}: Quantity must be greater than zero.`;
           break;
         }
+        if(!line.estimated_unit_price.trim()||!Number.isFinite(Number(line.estimated_unit_price))||Number(line.estimated_unit_price)<=0){errs.lines=`Line ${i+1}: Enter a positive estimated unit price.`;break;}
       }
     }
 
@@ -189,11 +194,13 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
     try {
       const payload = {
         project_id: projectId,
+        site_id: siteId,
         required_by_date: requiredByDate,
         notes: notes.trim() || null,
         items: lines.map((l) => ({
           material_id: l.material_id,
           quantity: Number(l.quantity),
+          estimated_unit_price:Number(l.estimated_unit_price),
         })),
       };
 
@@ -201,7 +208,7 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
       setFormSuccess(`Requisition ${result.code || 'created'} submitted successfully for approval.`);
       setRequiredByDate('');
       setNotes('');
-      setLines([{ material_id: '', quantity: '1', unit: '' }]);
+      setLines([{ material_id: '', quantity: '1', unit: '',estimated_unit_price:'' }]);
     } catch (err) {
       setFormError(requisitionErrorMessage(err, 'purchase requisition'));
     } finally {
@@ -293,6 +300,7 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
                   value={projectId}
                   onChange={(e) => {
                     setProjectId(e.target.value);
+                    setSiteId('');
                     if (formErrors.project) setFormErrors((prev) => ({ ...prev, project: undefined }));
                   }}
                   disabled={formSubmitting || loadingRefs}
@@ -306,6 +314,8 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
                 </select>
                 {formErrors.project && <small id="req-project-error" className="field-error">{formErrors.project}</small>}
               </label>
+
+              <label className="manage-field">Site *<select required aria-label="Requisition site" value={siteId} onChange={e=>setSiteId(e.target.value)} disabled={loadingRefs||formSubmitting}><option value="">Select an authorized site</option>{sites.filter(site=>site.projectId===projectId).map(site=><option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
 
               <label className="manage-field" htmlFor="req-required-date">
                 <span>Required By Date *</span>
@@ -361,6 +371,7 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
                       <th style={{ width: '45%' }}>Material *</th>
                       <th style={{ width: '20%' }}>Base Unit</th>
                       <th style={{ width: '25%' }}>Quantity *</th>
+                      <th>Estimated unit price *</th>
                       <th style={{ width: '10%' }}>Action</th>
                     </tr>
                   </thead>
@@ -405,6 +416,7 @@ export function RequisitionsPage({ isApprover = false, canCreate = true, canList
                             disabled={formSubmitting}
                           />
                         </td>
+                        <td><input aria-label={`Estimated unit price for line ${idx+1}`} required type="number" min="0.01" step="0.01" value={line.estimated_unit_price} onChange={e=>setLines(current=>current.map((item,index)=>index===idx?{...item,estimated_unit_price:e.target.value}:item))}/></td>
                         <td>
                           <button
                             type="button"

@@ -19,6 +19,9 @@ import { SuppliersPage } from './pages/Suppliers';
 import { RequisitionsPage } from './pages/Requisitions';
 import { nav, resources, rolePrefix, navigationPermission } from './pages/managementConfig';
 import { AdminOrganizationPage } from './pages/AdminOrganization';
+import ProcurementWorkspace from './pages/ProcurementWorkspace';
+import { DeliveryWorkspace } from './pages/DeliveryWorkspace';
+import ReportsWorkspace from './pages/ReportsWorkspace';
 import './management.css';
 
 type Theme = 'light' | 'dark';
@@ -159,8 +162,15 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   else if (key === prefix + '/projects' && prefix !== 'admin' && items.some(entry=>entry.path===location.pathname)) page = <ProjectsPage onViewSites={(projectId) => navigate('/'+prefix+'/sites', { state: { projectId } })} canCreate={false}/>;
   else if (key === prefix + '/sites' && prefix !== 'admin' && items.some(entry=>entry.path===location.pathname)) page = <SitesPage key={sitesProject} initialProjectId={sitesProject} canCreate={false}/>;
   else if (key === 'admin/projects/new' || key === 'projects/new') page = <ProjectManagementPage/>;
+  else if (key===prefix+'/purchasing'&&items.some(entry=>entry.path===location.pathname)) page=<ProcurementWorkspace mode="purchasing" permissions={user.permissions??[]} context={context}/>;
+  else if (key===prefix+'/supplier-portal'&&items.some(entry=>entry.path===location.pathname)) page=<ProcurementWorkspace mode="supplier" permissions={user.permissions??[]} context={context}/>;
+  else if (key==='admin/procurement-policy'&&items.some(entry=>entry.path===location.pathname)) page=<ProcurementWorkspace mode="policies" permissions={user.permissions??[]} context={context}/>;
+  else if(key===prefix+'/deliveries'&&items.some(entry=>entry.path===location.pathname)) page=<DeliveryWorkspace permissions={user.permissions??[]}/>;
+  else if(key===prefix+'/costs'&&items.some(entry=>entry.path===location.pathname)) page=<ReportsWorkspace mode="costs" permissions={user.permissions??[]}/>;
+  else if(key===prefix+'/operations'&&items.some(entry=>entry.path===location.pathname)) page=<ReportsWorkspace mode="operations" permissions={user.permissions??[]}/>;
+  else if(key===prefix+'/audit-report'&&items.some(entry=>entry.path===location.pathname)) page=<ReportsWorkspace mode="audit" permissions={user.permissions??[]}/>;
   else if (key === 'warehouse/materials' || key === 'admin/materials') page = <MaterialsPage canRegister={user.permissions?.includes('inventory.receive') ?? (prefix === 'admin' || prefix === 'warehouse')}/>;
-  else if (key === 'warehouse/suppliers' || key === 'admin/suppliers') page = <SuppliersPage canViewPricing={user.permissions?.includes('procurement.pricing.read') ?? (prefix === 'admin' || prefix === 'warehouse')}/>;
+  else if (key === prefix+'/suppliers'&&items.some(entry=>entry.path===location.pathname)) page = <SuppliersPage canViewPricing={user.permissions?.includes('procurement.pricing.read')??false}/>;
   else if (key === prefix+'/requisitions' && items.some(entry=>entry.path===location.pathname)) page = <RequisitionsPage isApprover={user.permissions?.includes('requisition.approve')??false} canCreate={user.permissions?.includes('requisition.create')??false} canList={user.permissions?.includes('requisition.read')??false}/>;
   else if (key === 'warehouse/projects') page = <ProjectsPage onViewSites={(projectId) => navigate('/warehouse/sites', { state: { projectId } })}/>;
   else if (key === 'warehouse/sites') page = <SitesPage key={sitesProject} initialProjectId={sitesProject}/>;

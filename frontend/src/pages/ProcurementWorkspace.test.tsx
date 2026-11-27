@@ -6,7 +6,7 @@ import { read, write, emptyContext } from '../services/management';
 vi.mock('../services/management',async original=>({...await original<typeof import('../services/management')>(),read:vi.fn(),write:vi.fn(),errorMessage:(e:unknown)=>(e as Error).message}));
 const context={...emptyContext,projects:[{id:'project-1',name:'River Bridge'}]};
 const fixtures:Record<string,unknown[]>={
- 'procurement/requisitions':[{id:'pr-1',code:'PR-42',project_name:'River Bridge',status:'APPROVED'}],
+ 'procurement/requisitions?view=workspace':[{id:'pr-1',code:'PR-42',project_name:'River Bridge',status:'APPROVED'}],
  'procurement/suppliers':[{id:'supplier-1',name:'Cement Partners',status:'ACTIVE'}],
  'procurement/quotations':[{id:'quote-1',supplier_name:'Cement Partners',requisition_code:'PR-42',lead_time_days:3,valid_until:'2028-01-01',items:[{id:'line-1',quantity:5,unit_price:4}]}],
  'procurement/supplier/rfqs':[{id:'rfq-1',requisition_code:'PR-42',due_date:'2028-01-01',items:[{id:'item-1',material_name:'Portland Cement',quantity:'5',unit:'bags'}]}],
@@ -34,8 +34,8 @@ describe('procurement workspace real handlers with mocked transport',()=>{
  });
  it('configures an explicit reviewer and allows admin supplier account linking',async()=>{
   const user=userEvent.setup();render(<ProcurementWorkspace mode="policies" permissions={['procurement.policy.manage','users.update']} context={context}/>);
-  await user.selectOptions(await screen.findByLabelText('Project'),'project-1');await user.selectOptions(screen.getByLabelText('Independent reviewer'),'reviewer-1');await user.click(screen.getByRole('button',{name:'Save reviewer policy'}));
-  await waitFor(()=>expect(write).toHaveBeenCalledWith('procurement/approval-policies',{project_id:'project-1',approver_id:'reviewer-1',kind:'REQUISITION',is_active:true},'put'));
+  await user.selectOptions(await screen.findByLabelText('Project'),'project-1');await user.selectOptions(screen.getByLabelText('Independent reviewer'),'reviewer-1');await user.clear(screen.getByLabelText('Maximum approval value'));await user.type(screen.getByLabelText('Maximum approval value'),'10000');await user.click(screen.getByRole('button',{name:'Save reviewer policy'}));
+  await waitFor(()=>expect(write).toHaveBeenCalledWith('procurement/approval-policies',{project_id:'project-1',approver_id:'reviewer-1',kind:'REQUISITION',is_active:true,max_amount:10000},'put'));
   await user.selectOptions(await screen.findByLabelText('Supplier'),'supplier-1');await user.selectOptions(screen.getByLabelText('Supplier user account'),'user-1');await user.click(screen.getByRole('button',{name:'Link account to supplier'}));await waitFor(()=>expect(write).toHaveBeenCalledWith('procurement/suppliers/supplier-1/users/user-1',{},'put'));
  });
 });

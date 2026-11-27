@@ -1,4 +1,5 @@
 -- PROPOSAL ONLY: requires team/schema approval. Not discovered by the migration runner.
+-- REVISED: requires reviewed team migration 007_procurement.sql first.
 -- Physical names follow existing plural naming; organizations map to canonical COMPANY.
 -- Apply in an explicit transaction on an isolated database first. No seed data is included.
 BEGIN;
@@ -17,25 +18,24 @@ CREATE TABLE approval_policies (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES organizations(id),
  project_id uuid NOT NULL REFERENCES projects(id), approver_id uuid NOT NULL REFERENCES users(id),
  kind text NOT NULL CHECK(kind IN ('REQUISITION','PURCHASE_ORDER')), is_active boolean NOT NULL DEFAULT true,
+ max_amount numeric(18,2) NOT NULL CHECK(max_amount>0), legacy_policy_id bigint NOT NULL,
+ FOREIGN KEY(legacy_policy_id,organization_id) REFERENCES requisition_approval_policies(id,organization_id),
  UNIQUE(organization_id,project_id,kind), UNIQUE(id,organization_id)
 );
-CREATE TABLE purchase_requisitions (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES organizations(id),
- code text NOT NULL, project_id uuid NOT NULL REFERENCES projects(id), requester_id uuid NOT NULL REFERENCES users(id),
- required_by_date date NOT NULL, notes text, status text NOT NULL DEFAULT 'PENDING_APPROVAL'
- CHECK(status IN ('PENDING_APPROVAL','APPROVED','REJECTED','FULFILLED')),
- created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(organization_id,code), UNIQUE(id,organization_id)
-);
-CREATE TABLE requisition_items (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES organizations(id),
- requisition_id uuid NOT NULL, material_id uuid NOT NULL REFERENCES materials(id), quantity numeric(14,3) NOT NULL CHECK(quantity>0),
- FOREIGN KEY(requisition_id,organization_id) REFERENCES purchase_requisitions(id,organization_id),
- UNIQUE(requisition_id,material_id), UNIQUE(id,organization_id)
-);
+-- Extend the merged teammate migration 007_procurement.sql; no second requisition model.
+ALTER TABLE requisitions
+ ADD COLUMN code text NOT NULL DEFAULT ('PR-' || gen_random_uuid()::text),
+ ADD COLUMN required_by_date date,
+ ADD COLUMN notes text,
+ ADD CONSTRAINT requisitions_org_code_unique UNIQUE(organization_id,code);
+ALTER TABLE requisition_items
+ ADD COLUMN id uuid NOT NULL DEFAULT gen_random_uuid(),
+ ADD CONSTRAINT requisition_items_id_unique UNIQUE(id),
+ ADD CONSTRAINT requisition_items_id_org_unique UNIQUE(id,organization_id);
 CREATE TABLE procurement_rfqs (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES organizations(id),
  requisition_id uuid NOT NULL, due_date date NOT NULL, created_by uuid NOT NULL REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now(),
- FOREIGN KEY(requisition_id,organization_id) REFERENCES purchase_requisitions(id,organization_id), UNIQUE(id,organization_id)
+ FOREIGN KEY(requisition_id,organization_id) REFERENCES requisitions(id,organization_id), UNIQUE(id,organization_id)
 );
 CREATE TABLE procurement_rfq_suppliers (
  rfq_id uuid NOT NULL, supplier_id uuid NOT NULL, organization_id uuid NOT NULL REFERENCES organizations(id),
@@ -74,10 +74,12 @@ CREATE TABLE approval_requests (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES organizations(id), policy_id uuid NOT NULL,
  requisition_id uuid, purchase_order_id uuid, approver_id uuid NOT NULL REFERENCES users(id), requester_id uuid NOT NULL REFERENCES users(id),
  status text NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')),
+ max_amount numeric(18,2) NOT NULL CHECK(max_amount>0), legacy_policy_id bigint NOT NULL,
+ FOREIGN KEY(legacy_policy_id,organization_id) REFERENCES requisition_approval_policies(id,organization_id),
  created_at timestamptz NOT NULL DEFAULT now(), CHECK(approver_id<>requester_id),
  CHECK((requisition_id IS NOT NULL)::integer+(purchase_order_id IS NOT NULL)::integer=1),
  FOREIGN KEY(policy_id,organization_id) REFERENCES approval_policies(id,organization_id),
- FOREIGN KEY(requisition_id,organization_id) REFERENCES purchase_requisitions(id,organization_id),
+ FOREIGN KEY(requisition_id,organization_id) REFERENCES requisitions(id,organization_id),
  FOREIGN KEY(purchase_order_id,organization_id) REFERENCES procurement_purchase_orders(id,organization_id),
  UNIQUE(requisition_id), UNIQUE(purchase_order_id), UNIQUE(id,organization_id)
 );
@@ -87,7 +89,7 @@ CREATE TABLE approval_actions (
  created_at timestamptz NOT NULL DEFAULT now(), CHECK(decision<>'REJECTED' OR length(trim(comments))>0 AND comments IS NOT NULL),
  FOREIGN KEY(approval_request_id,organization_id) REFERENCES approval_requests(id,organization_id)
 );
-CREATE INDEX procurement_requisition_scope_idx ON purchase_requisitions(organization_id,project_id,created_at DESC);
+CREATE INDEX procurement_requisition_scope_idx ON requisitions(organization_id,project_id,created_at DESC);
 CREATE INDEX procurement_approval_queue_idx ON approval_requests(organization_id,approver_id,status);
 CREATE INDEX procurement_price_dates_idx ON procurement_quotations(organization_id,supplier_id,created_at);
 
@@ -95,7 +97,7 @@ CREATE INDEX procurement_price_dates_idx ON procurement_quotations(organization_
 ALTER TABLE supplier_users ADD FOREIGN KEY(user_id,organization_id) REFERENCES users(id,organization_id);
 ALTER TABLE approval_policies ADD FOREIGN KEY(project_id,organization_id) REFERENCES projects(id,organization_id),
  ADD FOREIGN KEY(approver_id,organization_id) REFERENCES users(id,organization_id);
-ALTER TABLE purchase_requisitions ADD FOREIGN KEY(project_id,organization_id) REFERENCES projects(id,organization_id),
+ALTER TABLE requisitions ADD FOREIGN KEY(project_id,organization_id) REFERENCES projects(id,organization_id),
  ADD FOREIGN KEY(requester_id,organization_id) REFERENCES users(id,organization_id);
 ALTER TABLE requisition_items ADD FOREIGN KEY(material_id,organization_id) REFERENCES materials(id,organization_id);
 ALTER TABLE procurement_rfqs ADD FOREIGN KEY(created_by,organization_id) REFERENCES users(id,organization_id);

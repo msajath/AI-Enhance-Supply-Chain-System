@@ -10,7 +10,7 @@ export const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => 
 }, 'Use a valid calendar date');
 export const quantity = z.number().finite().positive().max(999999999).multipleOf(0.001);
 export const price = z.number().finite().min(0).max(999999999).multipleOf(0.01);
-export const requisitionSchema = z.object({project_id:uuid, required_by_date:calendarDate, notes:z.string().max(4000).nullable().optional(), items:z.array(z.object({material_id:uuid,quantity}).strict()).min(1).max(100)}).strict().refine(v=>new Set(v.items.map(i=>i.material_id)).size===v.items.length, 'Use one line per material');
+export const requisitionSchema = z.object({project_id:uuid,site_id:uuid, required_by_date:calendarDate, notes:z.string().max(4000).nullable().optional(), items:z.array(z.object({material_id:uuid,quantity,estimated_unit_price:price.positive()}).strict()).min(1).max(100)}).strict().refine(v=>new Set(v.items.map(i=>i.material_id)).size===v.items.length, 'Use one line per material');
 export const decisionSchema = z.object({comments:z.string().trim().max(4000).nullable().optional()}).strict();
 export const supplierSchema = z.object({code:text,name:text,contact_person:text,email:z.string().trim().email().max(255),phone:text,address:z.string().max(2000).nullable().optional(),status:z.enum(['ACTIVE','INACTIVE','SUSPENDED']).default('ACTIVE')}).strict();
 export const quotationSchema = z.object({rfq_id:uuid,valid_until:calendarDate,lead_time_days:z.number().int().min(0).max(3650),delivery_terms:z.string().max(2000).optional(),items:z.array(z.object({requisition_item_id:uuid,quantity,unit_price:price}).strict()).min(1).max(100)}).strict().refine(v=>new Set(v.items.map(i=>i.requisition_item_id)).size===v.items.length,'Duplicate quotation lines');
@@ -32,6 +32,6 @@ export async function supplierIdentity(c:PoolClient,a:AuthContext) {
  const row=(await c.query(`SELECT s.* FROM supplier_users su JOIN suppliers s ON s.id=su.supplier_id AND s.organization_id=su.organization_id WHERE su.user_id=$1 AND su.organization_id=$2 AND s.status='ACTIVE' FOR SHARE OF s`,[a.userId,a.organizationId])).rows[0];
  if(!row) fail('No active supplier organization is linked to this account.',403); return row;
 }
-export const requisitionSelect=`SELECT r.*,p.name project_name,u.full_name requester_name,
+export const requisitionSelect=`SELECT r.*,CASE WHEN r.status='SUBMITTED' THEN 'PENDING_APPROVAL' ELSE r.status END status,p.name project_name,u.full_name requester_name,
  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'material_id',i.material_id,'material_code',m.code,'material_name',m.name,'unit',m.unit,'quantity',i.quantity) ORDER BY m.name) FROM requisition_items i JOIN materials m ON m.id=i.material_id WHERE i.requisition_id=r.id),'[]'::jsonb) items
- FROM purchase_requisitions r JOIN projects p ON p.id=r.project_id JOIN users u ON u.id=r.requester_id`;
+ FROM requisitions r JOIN projects p ON p.id=r.project_id JOIN users u ON u.id=r.requester_id`;

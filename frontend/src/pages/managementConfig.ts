@@ -64,14 +64,32 @@ for(const prefix of ['management','procurement','project']) {
 }
 
 resources['auditor/audit']={...resources['admin/audit'],path:'review/audit'};
+for(const prefix of ['management','procurement','finance','auditor']) nav[prefix].push({path:`/${prefix}/suppliers`,label:'Suppliers'});
+for(const prefix of ['management','procurement','finance','auditor']) nav[prefix].push({path:`/${prefix}/purchasing`,label:prefix==='management'?'Purchase approvals':'Purchasing'});
+nav.admin.push({path:'/admin/procurement-policy',label:'Procurement policies'});
+nav.supplier.push({path:'/supplier/supplier-portal',label:'RFQs & purchase orders'});
+for(const prefix of ['logistics','project','site','fleet','driver']) nav[prefix].push({path:`/${prefix}/deliveries`,label:prefix==='site'?'Site deliveries':'Deliveries'});
+for(const prefix of ['admin','management','finance']) nav[prefix].push({path:`/${prefix}/costs`,label:'Project costs'});
+for(const prefix of ['management','warehouse','fleet','site','auditor']) nav[prefix].push({path:`/${prefix}/operations`,label:'Operational reports'});
+for(const prefix of ['admin','auditor']) nav[prefix].push({path:`/${prefix}/audit-report`,label:'Audit reports'});
+resources['procurement/supplier-register']={title:'Supplier registry',description:'Maintain vetted company suppliers. Suspending a supplier blocks new quotations and orders.',path:'procurement/suppliers',fields:[f('code','Supplier code'),f('name','Company name'),f('contact_person','Contact person'),f('email','Email',{type:'email'}),f('phone','Phone'),f('address','Address',{optional:true}),status(['ACTIVE','INACTIVE','SUSPENDED'])],columns:['code','name','contact_person','email','status'],create:true,edit:true};
+nav.procurement.push({path:'/procurement/supplier-register',label:'Manage suppliers'});
 nav.admin.splice(6,0,{path:'/admin/departments',label:'Departments'});
 nav.auditor.push({path:'/auditor/audit',label:'Audit logs'});
 export function navigationPermission(path:string):string {
  const [prefix,page]=path.slice(1).split('/');
+ if(page==='procurement-policy')return 'procurement.policy.manage';
+ if(page==='supplier-register')return 'supplier.manage';
+ if(page==='supplier-portal')return 'rfq.supplier.read';
+ if(page==='purchasing')return prefix==='management'?'purchase_order.approve':'purchase_order.read';
+ if(page==='costs')return 'cost_report.read';
+ if(page==='operations')return prefix==='fleet'?'fleet.reports.read':prefix==='site'||prefix==='warehouse'?'inventory.read':'reports.read';
+ if(page==='audit-report')return 'audit.read';
+ if(page==='deliveries')return prefix==='driver'?'delivery.assigned.read':prefix==='site'?'site_receipt.confirm':prefix==='fleet'?'fleet.assignments.manage':'delivery.read';
  if(page==='assignments'&&prefix==='driver')return 'driver.assignments.read';
  if(['projects','sites'].includes(page)&&prefix!=='admin')return 'projects.read';
  if(page==='materials')return 'inventory.read';
- if(page==='suppliers')return prefix==='admin'?'users.read':'inventory.read';
+ if(page==='suppliers')return 'supplier.read';
  if(page==='requisitions')return prefix==='management'?'requisition.approve':'requisition.read';
  if(page==='dashboard')return 'dashboard.'+prefix+'.read';
  if(page==='audit')return 'audit.read';

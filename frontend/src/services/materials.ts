@@ -21,8 +21,8 @@ export interface RegisterMaterialInput {
   reorder_level: number;
 }
 
-export async function fetchMaterials(signal?: AbortSignal): Promise<Material[]> {
-  const response = await apiClient.get<{ success: boolean; data: { rows: Material[] } }>('/api/v1/warehouse/materials', {
+export async function fetchMaterials(signal?: AbortSignal, procurement = false): Promise<Material[]> {
+  const response = await apiClient.get<{ success: boolean; data: { rows: Material[] } }>(procurement?'/api/v1/procurement/materials':'/api/v1/warehouse/materials', {
     withCredentials: true,
     signal,
   });

@@ -13,6 +13,7 @@ import { scorecardRouter } from './scorecards.routes';
 import { createWarehouseRouter } from './warehouse.routes';
 import { safe,fail,audit,permit,orgParams,projectScope,warehouseScope,text,uuid,project,warehouse } from '../modules/management/shared';
 import { PERMISSIONS, ROLES, DASHBOARD_PREFIX, ROLE_LABELS, hasPermission } from '../auth/permissions';
+import { roleDashboard } from '../modules/reporting/roleDashboards';
 export function createManagementRouter(sessionMiddleware:RequestHandler) {
  const r=Router();
  r.use(['/admin','/fleet','/warehouse','/context','/account','/review',...ROLES.map(role => '/' + DASHBOARD_PREFIX[role])],sessionMiddleware,requireAuth,(_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
@@ -90,7 +91,7 @@ export function createManagementRouter(sessionMiddleware:RequestHandler) {
  for (const role of ROLES.filter(role => !['ADMIN','FLEET_MANAGER','WAREHOUSE_MANAGER','DRIVER','DRIVER_OPERATOR'].includes(role))) {
   r.get('/'+DASHBOARD_PREFIX[role]+'/dashboard',permit('dashboard.'+DASHBOARD_PREFIX[role]+'.read'),safe(async(req,res)=>{
    const a=req.auth!; if(a.role!==role) fail('Dashboard access denied.',403);
-   res.json(ApiResponse.success({cards:[],activity:[],alerts:[],workspace:ROLE_LABELS[role],modulesPending:true}));
+   res.json(ApiResponse.success({...await roleDashboard(a),workspace:ROLE_LABELS[role]}));
   }));
  }
  r.get('/review/audit',permit('audit.read'),safe(async(req,res)=>{

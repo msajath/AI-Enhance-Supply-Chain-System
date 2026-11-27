@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool, withTransaction } from '../config/database';
 import { ApiResponse } from '../utils/apiResponse';
+import { assignedPolicy } from '../modules/procurement/shared';
 import {
   amount,
   fail,
@@ -12,6 +13,7 @@ import {
   site,
   text,
   uuid,
+  audit,insert,
 } from '../modules/management/shared';
 
 export const requisitionRouter = Router();
@@ -68,6 +70,7 @@ requisitionRouter.post(
        RETURNING material_id,quantity,estimated_unit_price`,
         [header.rows[0].id, a.organizationId, JSON.stringify(data.items)]
       );
+      await audit(c,a,'REQUISITION_DRAFT_CREATED',{id:header.rows[0].id,project_id:data.project_id});
       return { ...header.rows[0], items: items.rows };
     });
     res.status(201).json(ApiResponse.success(result));
@@ -94,12 +97,22 @@ requisitionRouter.post(
   permit('requisition.submit'),
   safe(async (req, res) => {
     const a = req.auth!;
-    const result = await pool.query(
+    const result = await withTransaction(async c=>{
+    const updated = await c.query(
       `UPDATE requisitions r SET status='SUBMITTED' WHERE ${visible}
      AND r.id=$4 AND r.requester_id=$3 AND r.status='DRAFT' RETURNING r.*`,
       [...orgParams(a), uuid.parse(req.params.id)]
     );
-    if (!result.rowCount) fail('No accessible draft owned by you is available to submit.', 409);
+    if (!updated.rowCount) fail('No accessible draft owned by you is available to submit.', 409);
+    const extension=(await c.query("SELECT to_regclass('public.approval_requests') table_name")).rows[0]?.table_name;
+    if(extension){
+      const policy=await assignedPolicy(c,a,updated.rows[0].project_id,'REQUISITION');
+      if(!(await c.query('SELECT sum(quantity*estimated_unit_price)<=$2::numeric within_limit FROM requisition_items WHERE requisition_id=$1',[updated.rows[0].id,policy.max_amount])).rows[0]?.within_limit)fail('The estimate exceeds the assigned reviewer limit.',403);
+      await insert(c,'approval_requests',{organization_id:a.organizationId,policy_id:policy.id,requisition_id:updated.rows[0].id,approver_id:policy.approver_id,requester_id:a.userId,max_amount:policy.max_amount,legacy_policy_id:policy.legacy_policy_id});
+    }
+    await audit(c,a,'REQUISITION_SUBMITTED',{id:updated.rows[0].id,project_id:updated.rows[0].project_id});
+    return updated;
+    });
     res.json(ApiResponse.success(result.rows[0]));
   })
 );
@@ -124,10 +137,13 @@ requisitionRouter.post(
       if (record.status !== 'SUBMITTED') fail('A decision requires a submitted requisition.');
       if (record.requester_id === a.userId)
         fail('A requester cannot decide their own requisition.', 403);
+      const extension=(await c.query("SELECT to_regclass('public.approval_requests') table_name")).rows[0]?.table_name;
+      const assigned=extension?(await c.query('SELECT * FROM approval_requests WHERE requisition_id=$1 AND organization_id=$2 FOR UPDATE',[id,a.organizationId])).rows[0]:undefined;
+      if(assigned&&(assigned.approver_id!==a.userId||assigned.status!=='PENDING'))fail('Only the assigned pending reviewer may decide.',403);
       const policy = await c.query(
         `SELECT id,max_amount >= (SELECT SUM(quantity*estimated_unit_price) FROM requisition_items WHERE requisition_id=$2) AS within_limit
-       FROM requisition_approval_policies WHERE organization_id=$1 ORDER BY id DESC LIMIT 1`,
-        [a.organizationId, id]
+       FROM requisition_approval_policies WHERE organization_id=$1 AND ($3::bigint IS NULL OR id=$3) ORDER BY id DESC LIMIT 1`,
+        [a.organizationId, id,assigned?.legacy_policy_id??null]
       );
       if (!policy.rowCount) fail('Configure an approval policy first.');
       if (!policy.rows[0].within_limit)
@@ -138,6 +154,11 @@ requisitionRouter.post(
         [a.organizationId, id, policy.rows[0].id, a.userId, input.decision, input.reason]
       );
       await c.query('UPDATE requisitions SET status=$2 WHERE id=$1', [id, input.decision]);
+      if(assigned){
+       await c.query('UPDATE approval_requests SET status=$2 WHERE id=$1',[assigned.id,input.decision]);
+       await insert(c,'approval_actions',{organization_id:a.organizationId,approval_request_id:assigned.id,actor_id:a.userId,decision:input.decision,comments:input.reason});
+      }
+      await audit(c,a,'REQUISITION_'+input.decision,{id,project_id:record.project_id});
       return saved.rows[0];
     });
     res.status(201).json(ApiResponse.success(decision));

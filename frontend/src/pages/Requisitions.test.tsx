@@ -53,9 +53,10 @@ describe('RequisitionsPage (AESCS-56)', () => {
   function setupMocks() {
     vi.spyOn(apiClient, 'get').mockImplementation(((url: string) => {
       if (url === '/api/v1/projects') return ok({ projects: mockProjects, scope: { companyWide: true } });
-      if (url === '/api/v1/warehouse/materials') return ok({ rows: mockMaterials });
+      if (url === '/api/v1/sites') return ok({ sites:[{id:'s1',projectId:'p1',projectCode:'PRJ-CMB-01',projectName:'Colombo Commercial Center',code:'S1',name:'Colombo Site',address:null,status:'ACTIVE'}],scope:{companyWide:true} });
+      if (url === '/api/v1/procurement/materials') return ok({ rows: mockMaterials });
       if (url === '/api/v1/procurement/approvals/queue') return ok({ rows: mockQueue });
-      if (url === '/api/v1/procurement/requisitions') return ok({ rows: [] });
+      if (url === '/api/v1/procurement/requisitions?view=workspace') return ok({ rows: [] });
       return Promise.reject(httpError(404));
     }) as never);
   }
@@ -147,6 +148,8 @@ describe('RequisitionsPage (AESCS-56)', () => {
     const qtyInput = screen.getByLabelText(/quantity for line 1/i);
     await userEvent.clear(qtyInput);
     await userEvent.type(qtyInput, '50');
+    await userEvent.selectOptions(screen.getByLabelText('Requisition site'),'s1');
+    await userEvent.type(screen.getByLabelText('Estimated unit price for line 1'),'100');
 
     await userEvent.click(screen.getByRole('button', { name: /submit requisition/i }));
 
@@ -156,7 +159,7 @@ describe('RequisitionsPage (AESCS-56)', () => {
         expect.objectContaining({
           project_id: 'p1',
           required_by_date: '2026-12-25',
-          items: [{ material_id: 'm1', quantity: 50 }],
+          items: [{ material_id: 'm1', quantity: 50, estimated_unit_price:100 }],
         }),
         expect.objectContaining({ withCredentials: true })
       );

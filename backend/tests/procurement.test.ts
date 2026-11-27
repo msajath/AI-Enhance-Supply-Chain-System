@@ -14,19 +14,19 @@ beforeEach(()=>{vi.resetAllMocks();transaction.mockImplementation(async cb=>cb({
 describe('procurement validation and security without a live database',()=>{
  it('rejects nonexistent calendar dates and duplicate/zero material lines',()=>{
   expect(calendarDate.safeParse('2028-02-29').success).toBe(true);expect(calendarDate.safeParse('2027-02-29').success).toBe(false);
-  const v={project_id:projectId,required_by_date:'2028-01-01',items:[{material_id:material,quantity:1}]};expect(requisitionSchema.safeParse(v).success).toBe(true);
+  const v={project_id:projectId,site_id:id,required_by_date:'2028-01-01',items:[{material_id:material,quantity:1,estimated_unit_price:2}]};expect(requisitionSchema.safeParse(v).success).toBe(true);
   expect(requisitionSchema.safeParse({...v,items:[...v.items,...v.items]}).success).toBe(false);
   expect(requisitionSchema.safeParse({...v,items:[{material_id:material,quantity:0}]}).success).toBe(false);
  });
  it('rejects duplicate quotation lines and arbitrary supplier identity',()=>{
   const line={requisition_item_id:id,quantity:1,unit_price:2};const v={rfq_id:id,valid_until:'2028-01-01',lead_time_days:2,items:[line]};expect(quotationSchema.safeParse(v).success).toBe(true);expect(quotationSchema.safeParse({...v,supplier_id:id}).success).toBe(false);expect(quotationSchema.safeParse({...v,items:[line,line]}).success).toBe(false);
  });
- it('requires authentication before touching persistence',async()=>{expect((await request(app('PROCUREMENT_OFFICER',false)).get('/procurement/requisitions')).status).toBe(401);expect(query).not.toHaveBeenCalled();});
- it('never creates an empty requisition',async()=>{const r=await request(app()).post('/procurement/requisitions').send({project_id:projectId,required_by_date:'2028-01-01',items:[]});expect(r.status).toBe(400);expect(transaction).not.toHaveBeenCalled();});
- it('parameterizes organization, caller and project-grant filtering',async()=>{query.mockResolvedValueOnce(result([]));expect((await request(app()).get('/procurement/requisitions')).status).toBe(200);expect(query.mock.calls[0][0]).toContain('user_project_access');expect(query.mock.calls[0][1]).toEqual([org,false,user]);});
+ it('requires authentication before touching persistence',async()=>{expect((await request(app('PROCUREMENT_OFFICER',false)).get('/procurement/requisitions?view=workspace')).status).toBe(401);expect(query).not.toHaveBeenCalled();});
+ it('never creates an empty requisition',async()=>{const r=await request(app()).post('/procurement/requisitions').send({project_id:projectId,site_id:id,required_by_date:'2028-01-01',items:[]});expect(r.status).toBe(400);expect(transaction).not.toHaveBeenCalled();});
+ it('parameterizes organization, caller and project-grant filtering',async()=>{query.mockResolvedValueOnce(result([]));expect((await request(app()).get('/procurement/requisitions?view=workspace')).status).toBe(200);expect(query.mock.calls[0][0]).toContain('user_project_access');expect(query.mock.calls[0][1]).toEqual([org,false,user]);});
  it('requires rejection comments before starting a transaction',async()=>{expect((await request(app('SUPPLY_CHAIN_MANAGER')).post('/procurement/approvals/'+id+'/reject').send({comments:'  '})).status).toBe(400);expect(transaction).not.toHaveBeenCalled();});
  it('locks the approval/document and prevents another reviewer deciding',async()=>{
-  query.mockResolvedValueOnce(result([{id,project_id:projectId,status:'PENDING',document_status:'PENDING_APPROVAL',approver_id:'other',requester_id:'requester'}])).mockResolvedValueOnce(result([{id:projectId,status:'ACTIVE'}]));
+  query.mockResolvedValueOnce(result([{id,project_id:projectId,status:'PENDING',document_status:'SUBMITTED',approver_id:'other',requester_id:'requester'}])).mockResolvedValueOnce(result([{id:projectId,status:'ACTIVE'}]));
   const r=await request(app('SUPPLY_CHAIN_MANAGER')).post('/procurement/approvals/'+id+'/approve').send({});expect(r.status).toBe(403);expect(query.mock.calls[0][0]).toContain('FOR UPDATE OF ar,r');expect(query.mock.calls.some(c=>String(c[0]).startsWith('UPDATE'))).toBe(false);
  });
  it('rejects already decided approval without updating',async()=>{
@@ -37,7 +37,7 @@ describe('procurement validation and security without a live database',()=>{
   query.mockResolvedValueOnce(result([]));expect((await request(app('SUPPLIER_USER')).get('/procurement/supplier/rfqs')).status).toBe(403);expect(query.mock.calls[0][0]).toContain('supplier_users');expect(query.mock.calls[0][1]).toEqual([user,org]);
  });
  it('commits decision and audit through one transaction callback',async()=>{
-  query.mockResolvedValueOnce(result([{id,project_id:projectId,status:'PENDING',document_status:'PENDING_APPROVAL',approver_id:user,requester_id:'other',requisition_id:id}])).mockResolvedValueOnce(result([{id:projectId,status:'ACTIVE'}])).mockResolvedValue(result([{id}]));
+  query.mockResolvedValueOnce(result([{id,project_id:projectId,status:'PENDING',document_status:'SUBMITTED',approver_id:user,requester_id:'other',requisition_id:id}])).mockResolvedValueOnce(result([{id:projectId,status:'ACTIVE'}])).mockResolvedValue(result([{id,within_limit:true}]));
   expect((await request(app('SUPPLY_CHAIN_MANAGER')).post('/procurement/approvals/'+id+'/approve').send({comments:'Reviewed'})).status).toBe(200);expect(transaction).toHaveBeenCalledTimes(1);expect(query.mock.calls.some(c=>String(c[0]).startsWith('INSERT INTO approval_actions'))).toBe(true);expect(query.mock.calls.some(c=>String(c[0]).startsWith('INSERT INTO system_audit_logs'))).toBe(true);
  });
  it('serializes purchase order allocation on the requisition and refuses over-ordering',async()=>{
@@ -50,8 +50,8 @@ describe('procurement validation and security without a live database',()=>{
   const r=await request(app()).post('/procurement/purchase-orders').send({quotation_id:id,reference_no:'PO-TEST'});expect(r.status).toBe(409);expect(query.mock.calls[0][0]).toContain('FOR UPDATE OF r');expect(query.mock.calls.some(c=>String(c[0]).startsWith('INSERT INTO procurement_purchase_orders'))).toBe(false);
  });
  it('creates an assigned approval only after validating company materials',async()=>{
-  query.mockResolvedValueOnce(result([{id:projectId,status:'ACTIVE'}])).mockResolvedValueOnce(result([{valid:true}]))
+  query.mockResolvedValueOnce(result([{id,project_id:projectId,status:'ACTIVE'}])).mockResolvedValueOnce(result([{id:projectId,status:'ACTIVE'}])).mockResolvedValueOnce(result([{valid:true}]))
    .mockResolvedValueOnce(result([{id,approver_id:'reviewer',role:'SUPPLY_CHAIN_MANAGER',is_active:true}]))
    .mockResolvedValueOnce(result([{id:projectId,status:'ACTIVE'}])).mockResolvedValueOnce(result([]));
-  const r=await request(app()).post('/procurement/requisitions').send({project_id:projectId,required_by_date:'2028-01-01',items:[{material_id:material,quantity:1}]});expect(r.status).toBe(403);expect(query.mock.calls[4][1]).toEqual([org,[material]]);expect(query.mock.calls.some(c=>String(c[0]).startsWith('INSERT'))).toBe(false);
+  const r=await request(app()).post('/procurement/requisitions').send({project_id:projectId,site_id:id,required_by_date:'2028-01-01',items:[{material_id:material,quantity:1,estimated_unit_price:2}]});expect(r.status).toBe(403);expect(query.mock.calls[5][1]).toEqual([org,[material]]);expect(query.mock.calls.some(c=>String(c[0]).startsWith('INSERT'))).toBe(false);
  });});

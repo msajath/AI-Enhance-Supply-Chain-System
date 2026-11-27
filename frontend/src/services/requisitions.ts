@@ -51,14 +51,15 @@ export interface ApprovalRequest {
 
 export interface CreateRequisitionInput {
   project_id: string;
+  site_id: string;
   required_by_date: string;
   notes?: string | null;
-  items: Array<{ material_id: string; quantity: number }>;
+  items: Array<{ material_id: string; quantity: number; estimated_unit_price: number }>;
 }
 
 export async function fetchRequisitions(signal?: AbortSignal): Promise<PurchaseRequisition[]> {
   const response = await apiClient.get<{ success: boolean; data: { rows: PurchaseRequisition[] } }>(
-    '/api/v1/procurement/requisitions',
+    '/api/v1/procurement/requisitions?view=workspace',
     { withCredentials: true, signal }
   );
   return response.data.data.rows;
