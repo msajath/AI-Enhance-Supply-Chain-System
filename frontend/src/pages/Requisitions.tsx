@@ -13,13 +13,14 @@ import { fetchProjects, type Project } from '../services/organization';
 import { fetchMaterials, type Material } from '../services/materials';
 import { StatusPill, EmptyState, ErrorState, LoadingRows } from './orgShared';
 
-export function RequisitionsPage({ isApprover = false }: { isApprover?: boolean }) {
-  const [tab, setTab] = useState<'create' | 'list' | 'queue'>(isApprover ? 'queue' : 'create');
+export function RequisitionsPage({ isApprover = false, canCreate = true, canList = true }: { isApprover?: boolean; canCreate?: boolean; canList?: boolean }) {
+  const [tab, setTab] = useState<'create' | 'list' | 'queue'>(isApprover ? 'queue' : canCreate ? 'create' : 'list');
 
   // Shared Reference Data
   const [projects, setProjects] = useState<Project[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loadingRefs, setLoadingRefs] = useState(true);
+  const [referenceError, setReferenceError] = useState('');
 
   // Form State
   const [projectId, setProjectId] = useState('');
@@ -53,24 +54,27 @@ export function RequisitionsPage({ isApprover = false }: { isApprover?: boolean 
 
   // Load projects & materials for form
   useEffect(() => {
+    if (!canCreate) { setLoadingRefs(false); return; }
     const controller = new AbortController();
     setLoadingRefs(true);
+    setReferenceError('');
     Promise.all([
-      fetchProjects(controller.signal).then((res) => res.projects).catch(() => []),
-      fetchMaterials(controller.signal).catch(() => []),
+      fetchProjects(controller.signal).then((res) => res.projects),
+      fetchMaterials(controller.signal),
     ])
       .then(([prjs, mats]) => {
         setProjects(prjs);
         setMaterials(mats);
       })
-      .finally(() => setLoadingRefs(false));
+      .catch(error => { if (!controller.signal.aborted) setReferenceError(requisitionErrorMessage(error, 'project and material reference data')); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingRefs(false); });
 
     return () => controller.abort();
-  }, []);
+  }, [canCreate]);
 
   // Load Requisitions list when tab is 'list'
   useEffect(() => {
-    if (tab !== 'list') return;
+    if (tab !== 'list' || !canList) return;
     const controller = new AbortController();
     setLoadingRequisitions(true);
     setRequisitionsError('');
@@ -89,7 +93,7 @@ export function RequisitionsPage({ isApprover = false }: { isApprover?: boolean 
       });
 
     return () => controller.abort();
-  }, [tab]);
+  }, [tab, canList]);
 
   // Load Approver Queue when tab is 'queue'
   const loadQueue = () => {
@@ -114,10 +118,10 @@ export function RequisitionsPage({ isApprover = false }: { isApprover?: boolean 
   };
 
   useEffect(() => {
-    if (tab === 'queue') {
-      loadQueue();
+    if (tab === 'queue' && isApprover) {
+      return loadQueue();
     }
-  }, [tab]);
+  }, [tab, isApprover]);
 
   // Form line manipulation
   const handleAddLine = () => {
@@ -172,6 +176,7 @@ export function RequisitionsPage({ isApprover = false }: { isApprover?: boolean 
 
   const handleSubmitRequisition = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate || referenceError || loadingRefs) return;
     if (submittingRef.current) return;
     setFormError('');
     setFormSuccess('');
@@ -245,31 +250,31 @@ export function RequisitionsPage({ isApprover = false }: { isApprover?: boolean 
           <p>Create multi-line material requisitions and review assigned approval queues in your project scope.</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
+          {canCreate && <button
             type="button"
             className={`button ${tab === 'create' ? 'button-primary' : 'button-outline'}`}
             onClick={() => setTab('create')}
           >
             New Requisition
-          </button>
-          <button
+          </button>}
+          {canList && <button
             type="button"
             className={`button ${tab === 'list' ? 'button-primary' : 'button-outline'}`}
             onClick={() => setTab('list')}
           >
             My Requisitions
-          </button>
-          <button
+          </button>}
+          {isApprover && <button
             type="button"
             className={`button ${tab === 'queue' ? 'button-primary' : 'button-outline'}`}
             onClick={() => setTab('queue')}
           >
             Approval Queue {queue.length > 0 && `(${queue.length})`}
-          </button>
+          </button>}
         </div>
       </div>
 
-      {tab === 'create' && (
+      {tab === 'create' && canCreate && (
         <div className="panel" style={{ padding: '24px', maxWidth: '880px' }}>
           <div className="dialog-heading" style={{ marginBottom: '16px' }}>
             <h2>Create Purchase Requisition</h2>
@@ -277,6 +282,7 @@ export function RequisitionsPage({ isApprover = false }: { isApprover?: boolean 
 
           {formSuccess && <div className="manage-success" role="status">{formSuccess}</div>}
           {formError && <div className="manage-error" role="alert">{formError}</div>}
+          {referenceError && <div className="manage-error" role="alert">{referenceError}</div>}
 
           <form onSubmit={handleSubmitRequisition} noValidate aria-busy={formSubmitting}>
             <div className="manage-form-grid">

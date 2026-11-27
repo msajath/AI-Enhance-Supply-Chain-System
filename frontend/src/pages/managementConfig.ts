@@ -8,6 +8,8 @@ const asset=[project,site,f('vehicle_number','Registration / asset number'),f('m
 const stock=[f('warehouse_id','Source warehouse',{ref:'warehouses'}),f('material_id','Material',{ref:'materials'}),f('quantity','Quantity',{type:'number',min:0}),f('reference','Unique reference'),f('reason','Reason / supplier details',{type:'textarea'}),f('batch','Batch / lot',{optional:true})];
 const document=(title:string,path:string,kind:string,fields:Field[]=stock):Resource=>({title,path:'warehouse/'+path,description:"Create a traceable record, then confirm the operation. Quantities use the selected material's unit.",fields,columns:['reference','material_name','warehouse_name','quantity','status','created_at'],create:true,actions:kind==='TRANSFER'?['dispatch','receive','cancel']:['post','cancel']});
 export const resources:Record<string,Resource>={
+ 'admin/departments':{title:'Departments & cost centres',description:'Maintain departments within your company. Deactivate unused departments to retain history.',path:'admin/departments',fields:[f('code','Department code'),f('name','Department name'),f('cost_center_code','Cost centre code',{optional:true}),f('is_active','Active',{type:'checkbox'})],columns:['code','name','cost_center_code','is_active'],create:true,edit:true},
+ 'admin/requests':{title:'Access requests',description:'Review pending account requests. Approved accounts still require explicit project and location assignments.',path:'admin/access-requests',fields:[],columns:['full_name','email','requested_role','status','created_at','reviewed_by'],actions:['approve','reject']},
  'admin/users':{title:'Users',description:'Manage accounts, role assignments and authorized projects and locations.',path:'admin/users',fields:[f('full_name','Full name'),f('email','Work email',{type:'email'}),f('role','Role',{options:roleCatalog.map(role=>role.code)}),f('password','Initial password',{type:'password',hint:'At least 12 characters. Share through your approved secure channel.'}),f('is_active','Active',{type:'checkbox'})],columns:['full_name','email','role','is_active'],create:true,edit:true,actions:['access','password']},
  'admin/projects':{title:'Projects',description:'Configure projects and lifecycle status. Use Completed or Cancelled to archive work.',path:'admin/projects',fields:[f('code','Project code'),f('name','Project name'),status(['ACTIVE','PLANNED','ON_HOLD','COMPLETED','CANCELLED']),f('start_date','Start date',{type:'date',optional:true}),f('end_date','End date',{type:'date',optional:true})],columns:['code','name','status','start_date','end_date'],create:true,edit:true},
  'admin/sites':{title:'Sites',description:"Manage construction sites within your organization's projects.",path:'admin/sites',fields:[project,f('code','Site code'),f('name','Site name'),f('address','Address',{type:'textarea',optional:true}),status(['ACTIVE','INACTIVE','CLOSED'])],columns:['code','name','project_id','address','status'],create:true,edit:true},
@@ -53,15 +55,24 @@ for(const role of roleCatalog.filter(role=>!['admin','fleet','warehouse','driver
  }
 }
 
+// Reuse the scoped project/site readers without adding any role privileges.
+for(const prefix of ['management','procurement','logistics','project','site','auditor']) {
+ nav[prefix].push({path:`/${prefix}/projects`,label:'Projects'},{path:`/${prefix}/sites`,label:'Sites'});
+}
+for(const prefix of ['management','procurement','project']) {
+ nav[prefix].push({path:`/${prefix}/requisitions`,label:prefix==='management'?'Assigned approvals':'Requisitions'});
+}
+
 resources['auditor/audit']={...resources['admin/audit'],path:'review/audit'};
+nav.admin.splice(6,0,{path:'/admin/departments',label:'Departments'});
 nav.auditor.push({path:'/auditor/audit',label:'Audit logs'});
 export function navigationPermission(path:string):string {
  const [prefix,page]=path.slice(1).split('/');
  if(page==='assignments'&&prefix==='driver')return 'driver.assignments.read';
- if(['projects','sites'].includes(page)&&prefix==='warehouse')return 'projects.read';
+ if(['projects','sites'].includes(page)&&prefix!=='admin')return 'projects.read';
  if(page==='materials')return 'inventory.read';
  if(page==='suppliers')return prefix==='admin'?'users.read':'inventory.read';
- if(page==='requisitions')return prefix==='admin'?'users.read':'inventory.read';
+ if(page==='requisitions')return prefix==='management'?'requisition.approve':'requisition.read';
  if(page==='dashboard')return 'dashboard.'+prefix+'.read';
  if(page==='audit')return 'audit.read';
  if(page==='warehouse-inventory'||page==='warehouse-movements')return 'inventory.read';

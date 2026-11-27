@@ -18,6 +18,15 @@ export const PERMISSIONS: Record<Role, readonly string[]> = {
  SUPPLIER_USER: ['rfq.supplier.read','quotation.supplier.submit','purchase_order.supplier.read'],
  AUDITOR: ['projects.read','inventory.read','fleet.vehicles.read','fleet.reports.read','reports.read','audit.read'],
 };
+// Capabilities for the delivered domain workflows. Assignment never bypasses project/tenant checks.
+const DOMAIN_PERMISSIONS: Partial<Record<Role,readonly string[]>> = {
+ ADMIN:['supplier.read','procurement.pricing.read','procurement.policy.manage','reports.read','cost_report.read','cost_report.export','cost_record.create','cost_budget.manage'],
+ SUPPLY_CHAIN_MANAGER:['supplier.read','procurement.pricing.read','requisition.read','quotation.read','purchase_order.read','cost_report.read'],
+ PROCUREMENT_OFFICER:['supplier.read','supplier.manage','procurement.pricing.read','purchase_order.read'],
+ FINANCE_OFFICER:['supplier.read','procurement.pricing.read','purchase_order.read'],
+ AUDITOR:['supplier.read','procurement.pricing.read','requisition.read','quotation.read','purchase_order.read'],
+};
+for(const role of ROLES) PERMISSIONS[role]=[...new Set([...PERMISSIONS[role],...(DOMAIN_PERMISSIONS[role]??[])])];
 export function isRole(value: unknown): value is Role { return typeof value==='string' && (ROLES as readonly string[]).includes(value); }
 export const PROJECT_READ_ROLES: readonly Role[] = ROLES.filter(role => PERMISSIONS[role].includes('projects.read') && role !== 'FLEET_MANAGER');
 export const COMPANY_WIDE_ROLES: readonly Role[] = ['ADMIN'];

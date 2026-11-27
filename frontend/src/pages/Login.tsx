@@ -4,6 +4,7 @@ import { login, loginErrorMessage, requestAccess, requestErrorMessage, type Auth
 import { Brand } from '../components/Brand';
 import Icon from '../components/Icon';
 import { OperationsScene } from '../components/OperationsScene';
+import demoRoles from '../demoRoles.json';
 
 type Theme = 'light' | 'dark';
 
@@ -33,6 +34,9 @@ const DEMO_ACCOUNTS = DEMO_PASSWORDS ? [
   { role: 'Fleet Manager', email: 'fleet@demo.qorvenz.test', password: DEMO_PASSWORDS.fleet, icon: 'truck' as const },
   { role: 'Warehouse Manager', email: 'warehouse.cen@demo.qorvenz.test', password: DEMO_PASSWORDS.warehouse, icon: 'package' as const },
   { role: 'Matara Storekeeper', email: 'storekeeper.mat@demo.qorvenz.test', password: DEMO_PASSWORDS.storekeeper, icon: 'box' as const },
+  ...demoRoles.filter(account => DEMO_PASSWORDS.additional[account.email]).map(account => ({
+    role: account.role, email: account.email, password: DEMO_PASSWORDS.additional[account.email], icon: 'settings' as const,
+  })),
 ] : [];
 
 export default function LoginPage({ onSignIn, sessionError, email, setEmail, theme, toggleTheme }: { onSignIn: (user: AuthUser) => void; sessionError: string; email: string; setEmail: (value: string) => void; theme: Theme; toggleTheme: () => void }) {

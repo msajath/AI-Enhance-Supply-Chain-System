@@ -1,5 +1,5 @@
 import { useEffect,useRef,useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { read,write,errorMessage,type Context,type Row } from '../services/management';
 import { resources,type Field,type Resource } from './managementConfig';
 import { StatusPill } from './orgShared';
@@ -27,11 +27,13 @@ function FieldInput({field,value,onChange,refs,values}:{field:Field;value:unknow
  </label>;
 }
 export function ResourcePage({resource,context,onChanged,scope}:{resource:Resource;context:Context;onChanged:()=>void;scope:string}) {
+ const location=useLocation();
  const [rows,setRows]=useState<Row[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0),[search,setSearch]=useState(''),[status,setStatus]=useState(''),[page,setPage]=useState(1);
  const [refs,setRefs]=useState<Record<string,Row[]>>({}),[editor,setEditor]=useState<Row| 'new'|null>(null),[values,setValues]=useState<Record<string,unknown>>({}),[action,setAction]=useState<{row:Row;name:string}|null>(null),[details,setDetails]=useState<Row[]|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
  const inFlight=useRef(false);
  const allRefs={...refs,projects:context.projects,sites:context.sites,warehouses:context.warehouses};
  const refresh=()=>{setRevision(v=>v+1);onChanged();};
+ useEffect(()=>{setPage(1);},[scope]);
  useEffect(()=>{let active=true;setLoading(true);setError('');setRows([]);setSearch('');setStatus('');setPage(1);
   read<{rows:Row[]}>(resource.path).then(data=>{if(active)setRows(data.rows);}).catch(e=>{if(active)setError(errorMessage(e));}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};
  },[resource.path,revision]);
@@ -82,7 +84,7 @@ export function ResourcePage({resource,context,onChanged,scope}:{resource:Resour
    </>}/>}
    <div className="table-footer"><span>{visible.length} record{visible.length===1?'':'s'} · Page {page} of {Math.max(1,Math.ceil(visible.length/12))}</span><div><button disabled={page<=1} onClick={()=>setPage(p=>p-1)}>Previous</button><button disabled={page*12>=visible.length} onClick={()=>setPage(p=>p+1)}>Next</button></div></div>
   </div>
-  {resource.path==='warehouse/inventory'&&<p className="manage-help">Register materials in <Link to="/warehouse/materials">Material Master</Link>, then post a goods receipt to add stock.</p>}
+  {resource.path==='warehouse/inventory'&&location.pathname.startsWith('/warehouse/')&&<p className="manage-help">Register materials in <Link to="/warehouse/materials">Material Master</Link>, then post a goods receipt to add stock.</p>}
   {['warehouse/counts','warehouse/adjustments'].includes(resource.path)&&<p className="manage-help">A separate authorized Warehouse Manager must post your reconciliation. If stock has changed, cancel and recount.</p>}
   {editor&&<Modal title={editor==='new'?'Create '+resource.title:'Edit '+resource.title} onClose={()=>{if(!busy){setEditor(null);setValues({});setError('');}}}><form onSubmit={save}><div className="manage-form-grid">{resource.fields.filter(f=>!(editor!=='new'&&f.key==='password')).map(f=><FieldInput key={f.key} field={f} value={values[f.key]} values={values} refs={allRefs} onChange={value=>setValues(v=>({...v,[f.key]:value,...(f.key==='project_id'?{site_id:''}:{})}))}/>)}</div>{error&&<p className="manage-error" role="alert">{error}</p>}<div className="dialog-footer"><button type="button" className="button button-outline" disabled={busy} onClick={()=>setEditor(null)}>Cancel</button><button className="button button-primary" disabled={busy}>{busy?'Saving...':'Save record'}</button></div></form></Modal>}
   {action&&<Modal title={label(action.name)+' · '+String(action.row.reference??action.row.full_name??'Confirm operation')} onClose={()=>{if(!busy){setAction(null);setValues({});setError('');}}}><form onSubmit={e=>{e.preventDefault();void runAction();}}>

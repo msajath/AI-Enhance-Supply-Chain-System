@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pool, withTransaction } from '../src/config/database';
+import { randomUUID } from 'crypto';
+import { env } from '../src/config/env';
+import { assertScopeTestDatabase } from './helpers/testDatabaseGuard';
 import { hasCompanyWideScope, isRole } from '../src/auth/permissions';
 import type { AuthContext } from '../src/middleware/authenticate';
 import {
@@ -17,8 +20,8 @@ import {
  * sites visible with test login").
  *
  * Opt-in, disposable database only:
- *   npm run db:migrate && npm run db:seed
- *   SCOPE_INTEGRATION=1 npx vitest run tests/scope.integration.test.ts
+ * Provision reviewed migrations/fixtures in qorvenz_verification_test separately.
+ * Set NODE_ENV=test, SCOPE_INTEGRATION=1 and DB_NAME=qorvenz_verification_test explicitly.
  */
 const enabled = process.env.SCOPE_INTEGRATION === '1';
 
@@ -26,8 +29,18 @@ describe.skipIf(!enabled)('project scope SQL against real PostgreSQL + seed data
   const ctx: Record<string, AuthContext> = {};
   const ids: Record<string, string> = {};
   let otherOrgProjectId = '';
+  const organizationId = randomUUID();
+  const runId = randomUUID();
+  const organizationCode = `SCOPE-${runId}`;
+  const auditPath = `/integration-test/${runId}`;
+  let identityVerified = false;
+  let fixtureCreated = false;
+  const ungrantedSiteId = randomUUID();
+  let ungrantedSiteCreated = false;
 
   beforeAll(async () => {
+    await assertScopeTestDatabase(pool, process.env, env.DB_NAME);
+    identityVerified = true;
     const { rows } = await pool.query<{ id: string; email: string }>(
       `SELECT id, email FROM users WHERE email = ANY($1::text[])`,
       [['admin@demo.qorvenz.test', 'warehouse.cen@demo.qorvenz.test', 'storekeeper.mat@demo.qorvenz.test', 'fleet@demo.qorvenz.test']]
@@ -41,23 +54,27 @@ describe.skipIf(!enabled)('project scope SQL against real PostgreSQL + seed data
     for (const row of (await pool.query<{ id: string; code: string }>('SELECT id, code FROM projects')).rows) ids[row.code] = row.id;
 
     // A second company with its own project, removed again in afterAll.
-    await pool.query(`INSERT INTO organizations (id, name, code) VALUES ('a0000000-0000-0000-0000-0000000000ee', 'Scope Test Other Co', 'SCOPE-TEST-OTHER') ON CONFLICT (code) DO NOTHING`);
-    const other = await pool.query<{ id: string }>(
-      `INSERT INTO projects (organization_id, code, name) VALUES ('a0000000-0000-0000-0000-0000000000ee', 'OTHER-1', 'Other company project')
-       ON CONFLICT (organization_id, code) DO UPDATE SET name = EXCLUDED.name RETURNING id`
-    );
-    otherOrgProjectId = other.rows[0].id;
+    await withTransaction(async client => {
+      await client.query('INSERT INTO organizations (id,name,code) VALUES ($1,$2,$3)', [organizationId, 'Scope Test Other Co', organizationCode]);
+      const other = await client.query<{ id: string }>('INSERT INTO projects (organization_id,code,name) VALUES ($1,$2,$3) RETURNING id', [organizationId, `OTHER-${runId}`, 'Other company project']);
+      otherOrgProjectId = other.rows[0].id;
+    });
+    fixtureCreated = true;
   });
 
   afterAll(async () => {
     try {
+      if (!identityVerified) return;
+      await assertScopeTestDatabase(pool, process.env, env.DB_NAME);
       await withTransaction(async client => {
-        const organizationId = 'a0000000-0000-0000-0000-0000000000ee';
-        await client.query('DELETE FROM projects WHERE organization_id = $1', [organizationId]);
+        if(ungrantedSiteCreated) await client.query('DELETE FROM sites WHERE id=$1 AND code=$2',[ungrantedSiteId,`SITE-${runId}`]);
+        if (fixtureCreated) {
+        await client.query('DELETE FROM projects WHERE id=$1 AND organization_id=$2', [otherOrgProjectId, organizationId]);
         // Migration 006 automatically seeds company-owned roles, even without users.
         await client.query('DELETE FROM roles WHERE organization_id = $1', [organizationId]);
-        await client.query('DELETE FROM organizations WHERE id = $1 AND code = $2', [organizationId, 'SCOPE-TEST-OTHER']);
-        await client.query(`DELETE FROM system_audit_logs WHERE metadata->>'path' = '/integration-test'`);
+        await client.query('DELETE FROM organizations WHERE id = $1 AND code = $2', [organizationId, organizationCode]);
+        }
+        if (ctx['storekeeper.mat']) await client.query(`DELETE FROM system_audit_logs WHERE actor_id=$1 AND metadata->>'path'=$2`, [ctx['storekeeper.mat'].userId, auditPath]);
       });
     } finally {
       await pool.end();
@@ -106,8 +123,19 @@ describe.skipIf(!enabled)('project scope SQL against real PostgreSQL + seed data
   });
 
   it('writes ACCESS_DENIED audit rows', async () => {
-    await insertAccessDeniedAudit({ actorId: ctx['storekeeper.mat'].userId, reason: 'PROJECT_OUT_OF_SCOPE', method: 'GET', path: '/integration-test', projectId: ids['PRJ-GAL'] });
-    const { rows } = await pool.query(`SELECT event_type, module, metadata FROM system_audit_logs WHERE metadata->>'path' = '/integration-test'`);
+    await insertAccessDeniedAudit({ actorId: ctx['storekeeper.mat'].userId, reason: 'PROJECT_OUT_OF_SCOPE', method: 'GET', path: auditPath, projectId: ids['PRJ-GAL'] });
+    const { rows } = await pool.query(`SELECT event_type, module, metadata FROM system_audit_logs WHERE actor_id=$1 AND metadata->>'path'=$2`, [ctx['storekeeper.mat'].userId, auditPath]);
     expect(rows[0]).toMatchObject({ event_type: 'ACCESS_DENIED', module: 'authz', metadata: { reason: 'PROJECT_OUT_OF_SCOPE' } });
+  });
+  it('does not disclose an ungranted sibling site or count it through project reads', async () => {
+    await assertScopeTestDatabase(pool, process.env, env.DB_NAME);
+    await pool.query('INSERT INTO sites(id,organization_id,project_id,code,name) VALUES ($1,$2,$3,$4,$5)',[
+      ungrantedSiteId,ctx.admin.organizationId,ids['PRJ-GAL'],`SITE-${runId}`,'Isolated ungranted sibling site',
+    ]);
+    ungrantedSiteCreated=true;
+    const manager=ctx['warehouse.cen'];
+    expect((await listAccessibleSites(manager,ids['PRJ-GAL'])).some(s=>s.id===ungrantedSiteId)).toBe(false);
+    expect((await findAccessibleProject(manager,ids['PRJ-GAL']))?.siteCount).toBe(1);
+    expect((await listAccessibleSites(ctx.admin,ids['PRJ-GAL'])).some(s=>s.id===ungrantedSiteId)).toBe(true);
   });
 });

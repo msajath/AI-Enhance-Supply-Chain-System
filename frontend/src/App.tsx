@@ -52,15 +52,16 @@ const INTRO: Record<string, string> = {
   driver: 'Here are the trips your fleet manager has assigned to you.',
 };
 
-function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
+function Dashboard({ prefix, user, scope }: { prefix: string; user: AuthUser; scope: string }) {
   const [data, setData] = useState<{ cards: { label: string; value: unknown }[]; activity: Row[]; alerts: Row[]; modulesPending?: boolean } | null>(null);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let active = true; setData(null); setError('');
-    read<typeof data>(prefix + '/dashboard').then((d) => { if (active) setData(d); }).catch((e) => { if (active) setError(errorMessage(e)); });
+    const filter=scope?'?'+(prefix==='warehouse'?'warehouse_id':'project_id')+'='+encodeURIComponent(scope):'';
+    read<typeof data>(prefix + '/dashboard'+filter).then((d) => { if (active) setData(d); }).catch((e) => { if (active) setError(errorMessage(e)); });
     return () => { active = false; };
-  }, [prefix, revision]);
+  }, [prefix, revision, scope]);
   const columns = (rows: Row[]) => rows[0] ? Object.keys(rows[0]).filter((k) => k !== 'id') : [];
   const firstTask = navFor(prefix, user)[1];
   return <>
@@ -69,6 +70,7 @@ function Dashboard({ prefix, user }: { prefix: string; user: AuthUser }) {
         <p className="hero-date">{today()}</p>
         <h1>{greeting()}, {user.full_name.split(' ')[0]}</h1>
         <p>{INTRO[prefix]??`Your ${user.role.toLowerCase()} workspace.`}{prefix !== 'driver' && ' Figures reflect only the projects and warehouses you can access.'}</p>
+        {prefix==='admin'&&<p>User and access-request figures cover your company. The project count follows the selected project.</p>}
         <div className="hero-actions">
           {firstTask && <Link className="button button-primary" to={firstTask.path}><Icon name={iconFor(firstTask.path)} size={17}/>{firstTask.label}</Link>}
           <button type="button" className="button button-ghost" onClick={() => setRevision((v) => v + 1)}>Refresh</button>
@@ -130,6 +132,9 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   const signOut = async () => { if (busy) return; setBusy(true); setError(''); try { await onLogout(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); } };
   const warehouseView=prefix==='warehouse'||resources[key]?.path.startsWith('warehouse/');
   const scopes = warehouseView ? context.warehouses : context.projects;
+  const supportsScope = key===prefix+'/dashboard'
+    ? ['admin','fleet','warehouse'].includes(prefix)
+    : Boolean(resources[key]&&!resources[key].path.startsWith('admin/')&&resources[key].path!=='warehouse/materials');
   const accountSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (busy) return;
     const form = new FormData(event.currentTarget); setBusy(true); setError('');
@@ -142,14 +147,14 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
   const sitesProject = (location.state as { projectId?: string } | null)?.projectId ?? '';
 
   let page;
-  if (key === prefix + '/dashboard') page = <Dashboard prefix={prefix} user={user}/>;
+  if (key === prefix + '/dashboard') page = <Dashboard prefix={prefix} user={user} scope={scope}/>;
   else if (key === 'admin/roles') page = <RolesPage/>;
-  else if (key === 'warehouse/projects') page = <ProjectsPage onViewSites={(projectId) => navigate('/warehouse/sites', { state: { projectId } })} canCreate={user.permissions?.includes('projects.manage') ?? (prefix === 'admin')}/>;
-  else if (key === 'warehouse/sites') page = <SitesPage key={sitesProject} initialProjectId={sitesProject} canCreate={user.permissions?.includes('sites.manage') ?? (prefix === 'admin')}/>;
+  else if (key === prefix + '/projects' && prefix !== 'admin' && items.some(entry=>entry.path===location.pathname)) page = <ProjectsPage onViewSites={(projectId) => navigate('/'+prefix+'/sites', { state: { projectId } })} canCreate={false}/>;
+  else if (key === prefix + '/sites' && prefix !== 'admin' && items.some(entry=>entry.path===location.pathname)) page = <SitesPage key={sitesProject} initialProjectId={sitesProject} canCreate={false}/>;
   else if (key === 'admin/projects/new' || key === 'projects/new') page = <ProjectManagementPage/>;
   else if (key === 'warehouse/materials' || key === 'admin/materials') page = <MaterialsPage canRegister={user.permissions?.includes('inventory.receive') ?? (prefix === 'admin' || prefix === 'warehouse')}/>;
   else if (key === 'warehouse/suppliers' || key === 'admin/suppliers') page = <SuppliersPage canViewPricing={user.permissions?.includes('procurement.pricing.read') ?? (prefix === 'admin' || prefix === 'warehouse')}/>;
-  else if (key === 'warehouse/requisitions' || key === 'admin/requisitions') page = <RequisitionsPage isApprover={prefix === 'admin' || prefix === 'warehouse'}/>;
+  else if (key === prefix+'/requisitions' && items.some(entry=>entry.path===location.pathname)) page = <RequisitionsPage isApprover={user.permissions?.includes('requisition.approve')??false} canCreate={user.permissions?.includes('requisition.create')??false} canList={user.permissions?.includes('requisition.read')??false}/>;
   else if (resources[key] && items.some(entry=>entry.path===location.pathname)) page = <ManagedRoute path={key} context={context} onChanged={() => setRevision((v) => v + 1)} scope={scope}/>;
   else page = <div className="org-state"><div><strong>Page not found</strong><p><Link to={'/' + prefix + '/dashboard'}>Return to overview</Link></p></div></div>;
 
@@ -178,7 +183,7 @@ function Shell({ user, theme, toggleTheme, onLogout, onExpired }: { user: AuthUs
         <button className="mobile-menu icon-button" aria-label="Open menu" onClick={() => setMenu(true)}><Icon name="menu"/></button>
         <span className="topbar-crumbs"><span>{user.role}</span><strong>{item?.label ?? 'Page'}</strong></span>
         <div className="top-actions">
-          {prefix !== 'driver' && <label className="filter-select scope-select"><Icon name="filter" size={15}/><span className="visually-hidden">{warehouseView ? 'Warehouse' : 'Project'}</span>
+          {prefix !== 'driver' && supportsScope && <label className="filter-select scope-select"><Icon name="filter" size={15}/><span className="visually-hidden">{warehouseView ? 'Warehouse' : 'Project'}</span>
             <select aria-label="Project or warehouse filter" value={scope} onChange={(e) => setScope(e.target.value)}><option value="">All my {warehouseView ? 'warehouses' : 'projects'}</option>{scopes.map((s) => <option key={s.id} value={s.id}>{String(s.name)}</option>)}</select>
           </label>}
           <span className="role-badge">{user.role}</span>

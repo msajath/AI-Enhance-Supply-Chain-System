@@ -74,7 +74,9 @@ export async function canAccessProject(auth: AuthContext, projectId: string): Pr
 const PROJECT_COLUMNS = `p.id, p.code, p.name, p.status,
   to_char(p.start_date, 'YYYY-MM-DD') AS "startDate",
   to_char(p.end_date, 'YYYY-MM-DD') AS "endDate",
-  (SELECT count(*)::int FROM sites s WHERE s.project_id = p.id) AS "siteCount"`;
+  (SELECT count(*)::int FROM sites s WHERE s.project_id = p.id AND ($2::boolean OR EXISTS (
+    SELECT 1 FROM user_site_access site_grant WHERE site_grant.user_id=$3 AND site_grant.site_id=s.id
+  ))) AS "siteCount"`;
 
 export async function listAccessibleProjects(auth: AuthContext): Promise<ProjectSummary[]> {
   const result = await pool.query<ProjectSummary>(
@@ -104,6 +106,7 @@ export async function listAccessibleSites(auth: AuthContext, projectId?: string)
      FROM sites s
      JOIN projects p ON p.id = s.project_id AND p.organization_id = s.organization_id
      WHERE ${PROJECT_SCOPE} AND ($4::uuid IS NULL OR p.id = $4::uuid)
+       AND ($2::boolean OR EXISTS (SELECT 1 FROM user_site_access site_grant WHERE site_grant.user_id=$3 AND site_grant.site_id=s.id))
      ORDER BY p.name, s.name`,
     [...scopeParams(auth), projectId ?? null]
   );

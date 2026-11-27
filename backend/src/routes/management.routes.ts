@@ -8,7 +8,7 @@ import { requireAuth } from '../middleware/authenticate';
 import { createAdminRouter } from './admin.routes';
 import { createFleetRouter } from './fleet.routes';
 import { createWarehouseRouter } from './warehouse.routes';
-import { safe,fail,audit,permit,orgParams,projectScope,warehouseScope,text } from '../modules/management/shared';
+import { safe,fail,audit,permit,orgParams,projectScope,warehouseScope,text,uuid,project,warehouse } from '../modules/management/shared';
 import { PERMISSIONS, ROLES, DASHBOARD_PREFIX, ROLE_LABELS, hasPermission } from '../auth/permissions';
 export function createManagementRouter(sessionMiddleware:RequestHandler) {
  const r=Router();
@@ -36,22 +36,29 @@ export function createManagementRouter(sessionMiddleware:RequestHandler) {
   });res.json(ApiResponse.success(null,'Account updated. Sign in again.'));
  }));
  for(const [prefix,role] of [['admin','ADMIN'],['fleet','FLEET_MANAGER'],['warehouse','WAREHOUSE_MANAGER']] as const) r.get('/'+prefix+'/dashboard',permit('dashboard.'+prefix+'.read'),safe(async(req,res)=>{
-  const a=req.auth!;if(a.role!==role) fail('Dashboard access denied.',403);const params=orgParams(a);let cards: {label:string;value:unknown}[]=[],activity:unknown[]=[],alerts:unknown[]=[];
+  const a=req.auth!;if(a.role!==role) fail('Dashboard access denied.',403);
+  const selection=(role==='WAREHOUSE_MANAGER'?z.object({warehouse_id:uuid.optional()}):z.object({project_id:uuid.optional()})).strict().parse(req.query);
+  const selected='warehouse_id' in selection?selection.warehouse_id:'project_id' in selection?selection.project_id:undefined;
+  if(selected) await withTransaction(c=>role==='WAREHOUSE_MANAGER'?warehouse(c,a,selected):project(c,a,selected,false));
+  const params=[...orgParams(a),selected??null];
+  const projectsInScope=(alias:string)=>projectScope(alias)+` AND ($4::uuid IS NULL OR ${alias}.project_id=$4)`;
+  const warehousesInScope=(alias:string)=>warehouseScope(alias)+` AND ($4::uuid IS NULL OR ${alias}.warehouse_id=$4)`;
+  let cards: {label:string;value:unknown}[]=[],activity:unknown[]=[],alerts:unknown[]=[];
   if(role==='ADMIN') {
-   const totals=(await pool.query(`SELECT (SELECT count(*) FROM users WHERE organization_id=$1 AND is_active) users,(SELECT count(*) FROM projects WHERE organization_id=$1 AND status='ACTIVE') projects,(SELECT count(*) FROM access_requests WHERE organization_id=$1 AND status='PENDING') requests,(SELECT count(*) FROM users u WHERE organization_id=$1 AND is_active AND role<>'ADMIN' AND NOT EXISTS(SELECT 1 FROM user_project_access g WHERE g.user_id=u.id)) pending`,[a.organizationId])).rows[0];
+   const totals=(await pool.query(`SELECT (SELECT count(*) FROM users WHERE organization_id=$1 AND is_active) users,(SELECT count(*) FROM projects WHERE organization_id=$1 AND status='ACTIVE' AND ($2::uuid IS NULL OR id=$2)) projects,(SELECT count(*) FROM access_requests WHERE organization_id=$1 AND status='PENDING') requests,(SELECT count(*) FROM users u WHERE organization_id=$1 AND is_active AND role=ANY($3::text[]) AND NOT EXISTS(SELECT 1 FROM user_project_access g WHERE g.user_id=u.id)) pending`,[a.organizationId,selected??null,ROLES.filter(role=>role!=='ADMIN'&&PERMISSIONS[role].includes('projects.read'))])).rows[0];
    cards=[{label:'Active users',value:totals.users},{label:'Active projects',value:totals.projects},{label:'Pending access requests',value:totals.requests},{label:'Accounts awaiting scope',value:totals.pending}];
    activity=(await pool.query('SELECT l.id,l.event_type,l.created_at,u.full_name FROM system_audit_logs l JOIN users u ON u.id=l.actor_id WHERE u.organization_id=$1 ORDER BY l.created_at DESC LIMIT 8',[a.organizationId])).rows;
    alerts=(await pool.query('SELECT role,count(*) count FROM users WHERE organization_id=$1 AND is_active GROUP BY role',[a.organizationId])).rows;
   } else if(role==='FLEET_MANAGER') {
-   const assets=(await pool.query(`SELECT v.*,(SELECT count(*)::int FROM vehicle_assignments a WHERE a.vehicle_id=v.id AND a.status='SCHEDULED' AND now() BETWEEN a.starts_at AND a.ends_at) assigned,(SELECT count(*)::int FROM maintenance_records m WHERE m.vehicle_id=v.id AND m.status='IN_PROGRESS') maintenance FROM fleet_vehicles v WHERE ${projectScope('v')}`,params)).rows;
+   const assets=(await pool.query(`SELECT v.*,(SELECT count(*)::int FROM vehicle_assignments a WHERE a.vehicle_id=v.id AND a.status='SCHEDULED' AND now() BETWEEN a.starts_at AND a.ends_at) assigned,(SELECT count(*)::int FROM maintenance_records m WHERE m.vehicle_id=v.id AND m.status='IN_PROGRESS') maintenance FROM fleet_vehicles v WHERE ${projectsInScope('v')}`,params)).rows;
    cards=[{label:'Assets in scope',value:assets.length},{label:'Available assets',value:assets.filter(v=>v.status==='AVAILABLE'&&!v.assigned&&!v.maintenance).length},{label:'Currently assigned',value:assets.filter(v=>v.assigned).length},{label:'Under maintenance',value:assets.filter(v=>v.maintenance||v.status==='MAINTENANCE').length}];
-   activity=(await pool.query(`SELECT a.id,v.vehicle_number,a.status,a.starts_at,a.ends_at FROM vehicle_assignments a JOIN fleet_vehicles v ON v.id=a.vehicle_id WHERE ${projectScope('a')} ORDER BY a.created_at DESC LIMIT 8`,params)).rows;
-   alerts=(await pool.query(`SELECT m.id,v.vehicle_number,m.description,m.scheduled_date,m.next_service_date FROM maintenance_records m JOIN fleet_vehicles v ON v.id=m.vehicle_id WHERE ${projectScope('v')} AND (m.status IN ('SCHEDULED','IN_PROGRESS') OR m.next_service_date<=current_date+30 OR m.next_service_mileage<=v.odometer) ORDER BY m.scheduled_date LIMIT 8`,params)).rows;
+   activity=(await pool.query(`SELECT a.id,v.vehicle_number,a.status,a.starts_at,a.ends_at FROM vehicle_assignments a JOIN fleet_vehicles v ON v.id=a.vehicle_id WHERE ${projectsInScope('a')} ORDER BY a.created_at DESC LIMIT 8`,params)).rows;
+   alerts=(await pool.query(`SELECT m.id,v.vehicle_number,m.description,m.scheduled_date,m.next_service_date FROM maintenance_records m JOIN fleet_vehicles v ON v.id=m.vehicle_id WHERE ${projectsInScope('v')} AND (m.status IN ('SCHEDULED','IN_PROGRESS') OR m.next_service_date<=current_date+30 OR m.next_service_mileage<=v.odometer) ORDER BY m.scheduled_date LIMIT 8`,params)).rows;
   } else {
-   const stock=(await pool.query(`SELECT b.*,m.reorder_level FROM stock_balances b JOIN materials m ON m.id=b.material_id WHERE ${warehouseScope('b')}`,params)).rows;
-   const docs=(await pool.query(`SELECT d.* FROM stock_documents d WHERE ${warehouseScope('d')}`,params)).rows;
+   const stock=(await pool.query(`SELECT b.*,m.reorder_level FROM stock_balances b JOIN materials m ON m.id=b.material_id WHERE ${warehousesInScope('b')}`,params)).rows;
+   const docs=(await pool.query(`SELECT d.* FROM stock_documents d WHERE ${warehousesInScope('d')}`,params)).rows;
    cards=[{label:'Inventory lines',value:stock.length},{label:'Low-stock lines',value:stock.filter(b=>Number(b.quantity)-Number(b.reserved)<=Number(b.reorder_level)).length},{label:'Pending receipts',value:docs.filter(d=>d.kind==='RECEIPT'&&d.status==='PENDING').length},{label:'Open transfers',value:docs.filter(d=>d.kind==='TRANSFER'&&['PENDING','IN_TRANSIT'].includes(d.status)).length}];
-   activity=(await pool.query(`SELECT m.id,i.name,m.quantity_change,m.quarantine_change,m.created_at,m.reason FROM stock_movements m JOIN materials i ON i.id=m.material_id WHERE ${warehouseScope('m')} ORDER BY m.created_at DESC LIMIT 8`,params)).rows;
+   activity=(await pool.query(`SELECT m.id,i.name,m.quantity_change,m.quarantine_change,m.created_at,m.reason FROM stock_movements m JOIN materials i ON i.id=m.material_id WHERE ${warehousesInScope('m')} ORDER BY m.created_at DESC LIMIT 8`,params)).rows;
    alerts=stock.filter(b=>Number(b.quarantined)>0).map(b=>({id:b.warehouse_id+'-'+b.material_id,warehouse_id:b.warehouse_id,material_id:b.material_id,quarantined:b.quarantined}));
   }
   res.json(ApiResponse.success({cards,activity,alerts}));

@@ -197,6 +197,24 @@ describe('RequisitionsPage (AESCS-56)', () => {
     });
   });
 
+  it('does not expose approval actions to a requester', async () => {
+    setupMocks(); render(<RequisitionsPage />);
+    expect(screen.queryByRole('button',{name:/approval queue/i})).not.toBeInTheDocument();
+  });
+
+  it('supports an approver-only workspace without create/list or material reference requests', async () => {
+    setupMocks(); render(<RequisitionsPage isApprover canCreate={false} canList={false}/>);
+    await screen.findByText('PR-2026-001');
+    expect(screen.queryByRole('button',{name:/new requisition/i})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:/my requisitions/i})).not.toBeInTheDocument();
+    expect(vi.mocked(apiClient.get).mock.calls.some(([url])=>url==='/api/v1/warehouse/materials')).toBe(false);
+  });
+
+  it('reports failed reference requests instead of pretending there are no materials', async () => {
+    vi.spyOn(apiClient,'get').mockRejectedValue(httpError(503)); render(<RequisitionsPage />);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
   it('requires rejection comment when rejecting a requisition', async () => {
     setupMocks();
     render(<RequisitionsPage isApprover />);

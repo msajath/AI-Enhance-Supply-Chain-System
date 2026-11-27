@@ -152,6 +152,15 @@ describe('session lifecycle', () => {
     expect(window.location.pathname).toBe('/'+role.prefix+'/dashboard');
     expect(screen.queryByRole('link',{name:'Users'})).not.toBeInTheDocument();
   });
+  it('refetches operational dashboard metrics when the scope changes',async()=>{
+    get.mockImplementation(async url=>({data:{success:true,data:String(url).includes('/auth/')?{user}:String(url).endsWith('/context')?{...otherData('/context'),projects:[{id:'project-1',name:'Assigned project'}]}:otherData(String(url).split('?')[0])}}));
+    render(<App/>);
+    const filter=await screen.findByLabelText('Project or warehouse filter');
+    await screen.findByRole('option',{name:'Assigned project'});
+    fireEvent.change(filter,{target:{value:'project-1'}});
+    await screen.findByRole('heading',{name:/Good (morning|afternoon|evening), Test/});
+    expect(get).toHaveBeenCalledWith('/api/v1/fleet/dashboard?project_id=project-1',{withCredentials:true});
+  });
   it('blocks an auditor from an administrative URL',async()=>{
     window.history.replaceState({},'', '/admin/users');
     get.mockImplementation(async()=>({data:{success:true,data:{user:{...user,role:'Auditor'}}}}));
